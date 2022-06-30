@@ -19,7 +19,7 @@ public class Peer {
     public static void main (String[] args) throws IOException, InterruptedException {
 
         // gera um IP randomico para o Peer
-        String ipString = InetAddress.fromInteger(random.nextInt()).getHostAddress();
+        //String ipString = InetAddress.fromInteger(random.nextInt()).getHostAddress();
 
         // Tenta criar uma conexão com o host remoto "127.0.0.1" na porta 9000
         // Socket s terá uma porta designada pelo SO - entre 1024 e 65535
