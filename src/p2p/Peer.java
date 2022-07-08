@@ -12,18 +12,33 @@ import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 
 public class Peer {
 
+    //Gera um IPv4 e uma porta aleatória para o Peer e cria um socket
+    public static Socket socketPeer() throws IOException {
+        //long millis = System.currentTimeMillis();
+        Random r = new Random();
+        // gera números aleatórios entre 1 e 255 para em seguida gerar uma string de IPs
+        String ip = r.nextInt(255 + 1) + "." + r.nextInt(255 + 1) + "." + r.nextInt(255 + 1) + "." + r.nextInt(255 + 1);
+        // gera um valor númerico entre 1024 e 65535
+        int port = ThreadLocalRandom.current().nextInt(1024, 65535 + 1);
+        // Socket s do peer terá IP entre 1.1.1.1 e 255.255.255.255 e uma porta designada entre 1024 e 65535
+        Socket s = new Socket(ip, port);
+        return s;
+    }
+
+    // estabelece a conexão entre o Peer e o Servidor
+    public static void conectToServer(){
+        while()
+    }
     public static void main (String[] args) throws IOException, InterruptedException {
 
-        // gera um IP randomico para o Peer
-        //String ipString = InetAddress.fromInteger(random.nextInt()).getHostAddress();
 
-        // Tenta criar uma conexão com o host remoto "127.0.0.1" na porta 9000
-        // Socket s terá uma porta designada pelo SO - entre 1024 e 65535
-        Socket s = new Socket("127.0.0.1", 9000);
+        Socket s = socketPeer();
 
         // cria a cadeia de saída (escrita) de informações do socket
         OutputStream os = s.getOutputStream();

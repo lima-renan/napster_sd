@@ -11,48 +11,64 @@ import com.google.gson.Gson;
 
 // Cabeçalho que será usado para as mensagens
 public class Mensagem {
-    private String id; //id da mensagem
-    private String mensagem; //conteúdo da mensagem
-    private String tamanho; //tamanho da mensagem em bytes
+    private InetAddress ip; //IP do peer
+    private int port; //Porta do Peer
+    private String option; //Operação
+    private String[] files; //arquivos
 
     // Construtores da classe
     public Mensagem(){
 
     }
 
-    //Seção 3: Cabeçalho da mensagem que será transmitida
-    public Mensagem(String id, String msg){
-        this.id = id;
-        this.mensagem = msg;
-        this.tamanho = Integer.toString((msg.length()));
+    //Mensagem de JOIN
+    public Mensagem(InetAddress ip, int port, String option){
+        this.ip = ip;
+        this.port = port;
+        this.option = option;
+    }
+
+    //Mensagem completa
+    public Mensagem(InetAddress ip, int port, String option, String[] files){
+        this.ip = ip;
+        this.port = port;
+        this.option = option;
+        this.files = files;
     }
 
     // Métodos setters e getters
 
-    public String getMensagem(){
-        return this.mensagem;
+    public InetAddress getIp(){
+        return this.ip;
     }
 
-    public String getId(){
-        return this.id;
+    public int getPort(){
+        return this.port;
     }
 
-    public String getTamanho(){
-        return this.tamanho;
+    public String getOption(){
+        return this.option;
     }
 
-    public void setId(String idt){
-        this.id = idt;
+    public String[] getFiles(){
+        return this.files;
     }
 
-    public void setMensagem(String msg){
-        this.mensagem = msg;
+    public void setIp(InetAddress ip){
+        this.ip = ip;
     }
 
-    public void setTamanho(int tmh){
-        this.tamanho = Integer.toString(tmh);
+    public void setPort(int port){
+        this.port = port;
     }
 
+    public void setOption(String option){
+        this.option = option;
+    }
+
+    public void setFiles(String[] file){
+        this.files = file;
+    }
 
     // Boas-vindas: Captura a mensagem que o usuário deseja enviar
     public static String capturaMensagem(){
@@ -222,12 +238,12 @@ public class Mensagem {
         return jmsgudp;
     }
 
-    // Envia o pacote com a string json através do socket
-    public static void enviaPacket (String jmsgudp, DatagramSocket clientSocket, InetAddress IPAddress) throws IOException{
+    // Envia o pacote com a mensagem através do socket para o IP e Porta do Servidor (127.0.0.1:10098)
+    public static void enviaPacket (String msg, DatagramSocket clientSocket, InetAddress ipServer, int portServer) throws IOException{
         byte[] sendData = new byte [1024]; // buffer de envio
-        sendData = (jmsgudp).getBytes();
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, 9876); //cria datagrama de envio
-        clientSocket.send(sendPacket); // envia pacote conforme opção
+        sendData = (msg).getBytes();
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, ipServer, portServer); //cria datagrama de envio
+        clientSocket.send(sendPacket); // envia pacote com a mensagem
     }
 
     // Verifica e configura a opção de envio - Seção 3: Buffer de envio
