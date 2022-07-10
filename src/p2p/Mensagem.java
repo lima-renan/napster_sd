@@ -11,65 +11,158 @@ import com.google.gson.Gson;
 
 // Cabeçalho que será usado para as mensagens
 public class Mensagem {
-    private InetAddress ip; //IP do peer
+    private String ip; //IP do peer
     private int port; //Porta do Peer
     private String option; //Operação
     private String[] files; //arquivos
 
     // Construtores da classe
-    public Mensagem(){
+    public Mensagem() {
 
     }
 
+    public Mensagem(String ip) {
+        this.ip = ip;
+    }
+
+    public Mensagem(String ip, int port) {
+        this.ip = ip;
+        this.port = port;
+    }
+
     //Mensagem de JOIN
-    public Mensagem(InetAddress ip, int port, String option){
+    public Mensagem(String ip, int port, String option) {
         this.ip = ip;
         this.port = port;
         this.option = option;
     }
 
     //Mensagem completa
-    public Mensagem(InetAddress ip, int port, String option, String[] files){
+    public Mensagem(String ip, int port, String option, String[] files) {
         this.ip = ip;
         this.port = port;
         this.option = option;
         this.files = files;
     }
 
+
     // Métodos setters e getters
 
-    public InetAddress getIp(){
+    public String getIp() {
         return this.ip;
     }
 
-    public int getPort(){
+    public int getPort() {
         return this.port;
     }
 
-    public String getOption(){
+    public String getOption() {
         return this.option;
     }
 
-    public String[] getFiles(){
+    public String[] getFiles() {
         return this.files;
     }
 
-    public void setIp(InetAddress ip){
+    public void setIp(String ip) {
         this.ip = ip;
     }
 
-    public void setPort(int port){
+    public void setPort(int port) {
         this.port = port;
     }
 
-    public void setOption(String option){
+    public void setOption(String option) {
         this.option = option;
     }
 
-    public void setFiles(String[] file){
+    public void setFiles(String[] file) {
         this.files = file;
     }
 
+    // Cria objeto que recebe o cabeçalho da mensagem que será enviada e retorna uma string json
+    public static String preparaJson (Mensagem msg){
+        Gson sendgson = new Gson(); // instância para gerar a string json de envio
+        String jmsgudp = sendgson.toJson(msg); // converte a mensagem em string json para envio
+        return jmsgudp;
+    }
+
+    // Envia o pacote com a mensagem no formato JSON através do socket para o IP e Porta do Servidor (127.0.0.1:10098)
+    public static void enviaPacket (String jsonMsg, DatagramSocket clientSocket, InetAddress ipServer, int portServer) throws IOException{
+        byte[] sendData = new byte [1024]; // buffer de envio
+        sendData = (jsonMsg).getBytes();
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, ipServer, portServer); //cria datagrama de envio
+        clientSocket.send(sendPacket); // envia pacote com a mensagem
+    }
+
+    // Envia o ACK para o peer
+    public static void setACK (Mensagem msg, DatagramPacket recPkt, DatagramSocket serverSocket) throws IOException{
+        byte[] sendBuf = new byte[1024]; // Buffer para armazenar os bytes do ACK
+
+        Gson gsonsend = new Gson(); // Objeto para armazernar a string json que será enviada no CAK
+
+        String sendmsgudp = gsonsend.toJson(msg); // converte a mensagem em json
+
+        sendBuf = sendmsgudp.getBytes(); //Prepara o buffer
+
+        InetAddress IPAddress = recPkt.getAddress();
+
+        int port = recPkt.getPort();
+
+        DatagramPacket sendPacket = new DatagramPacket(sendBuf, sendBuf.length, IPAddress, port);
+
+        serverSocket.send(sendPacket);
+    }
+
+    // Trata as mensagens recebidas dos peers e envia um ACK
+    public static void sendACK (DatagramSocket serverSocket, HashMap<InetAddress, Integer> ip_port_peers) throws IOException{
+
+        Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do cliente
+
+        byte[] recBuffer = new byte[1024];
+
+        DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length);
+
+        serverSocket.receive(recPkt); //BLOCKING
+
+        String informacao = new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength()); //Datagrama do cliente é convertido em String json
+
+        Mensagem msg = recgson.fromJson(informacao,Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
+        // verifica a comunicação do peer
+        if((msg.getOption()).equals("JOIN")){
+            if(ip_port_peers.containsKey(msg.getIp())){ // se já houver algum peer com o mesmo IP, o JOIN é negado
+                msg.setOption("JOIN_DENIED");
+                setACK(msg, recPkt, serverSocket); // envia o ACK para o cliente
+            }
+            else{
+                msg.setOption("JOIN_OK");
+                ip_port_peers.put(InetAddress.getByName(msg.getIp()), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
+                setACK(msg, recPkt, serverSocket); // envia o ACK para o cliente
+            }
+        }
+    }
+
+    //Recebe o ACK do Servidor e retorna a Mensagem com detalhes da conexão
+    public static Mensagem ACKfromServer (DatagramSocket clientSocket) throws IOException{
+
+        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio pelo setEnvio()
+
+        byte[] recBuffer = new byte[1024]; // buffer de recebimento
+
+        DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length); // cria pacote de recebimento
+
+        clientSocket.receive(recPkt); // recebe o pacote do servidor
+
+        String informacao = new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength()); //obtem a mensagem no formato json string
+
+        Gson recgson = new Gson(); // instância para gerar a string json de recebimento
+        Mensagem msg = recgson.fromJson(informacao, Mensagem.class); //converte a string json em mensagem
+
+        return msg;
+
+    }
+}
+    /*
     // Boas-vindas: Captura a mensagem que o usuário deseja enviar
     public static String capturaMensagem(){
         System.out.print("Digite a mensagem que deseja enviar ou digite sair para encerrar: ");
@@ -238,10 +331,10 @@ public class Mensagem {
         return jmsgudp;
     }
 
-    // Envia o pacote com a mensagem através do socket para o IP e Porta do Servidor (127.0.0.1:10098)
-    public static void enviaPacket (String msg, DatagramSocket clientSocket, InetAddress ipServer, int portServer) throws IOException{
+    // Envia o pacote com a mensagem no formato JSON através do socket para o IP e Porta do Servidor (127.0.0.1:10098)
+    public static void enviaPacket (String jsonMsg, DatagramSocket clientSocket, InetAddress ipServer, int portServer) throws IOException{
         byte[] sendData = new byte [1024]; // buffer de envio
-        sendData = (msg).getBytes();
+        sendData = (jsonMsg).getBytes();
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, ipServer, portServer); //cria datagrama de envio
         clientSocket.send(sendPacket); // envia pacote com a mensagem
     }
@@ -310,3 +403,4 @@ public class Mensagem {
     }
 
 }
+*/

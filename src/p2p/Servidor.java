@@ -14,12 +14,11 @@ public class Servidor {
             InetAddress addr = InetAddress.getByName("127.0.0.1"); // Define o IP do servidor
             DatagramSocket serverSocket;
             serverSocket = new DatagramSocket(10098,addr); //porta default do servidor para comunicação com os peers
-            HashMap<String, String> recebidas = new HashMap<>(); // Cria um HashMap para controlar as mensagens recebidas
+            HashMap<InetAddress, Integer> ip_port_peers = new HashMap<InetAddress, Integer>(); // Cria um HashMap vazio para registrar os Ips e portas dos peers
 
-            //O Servidor permanece funcionando
+            // O Servidor permanece funcionando
             while(true){
-                System.out.println(serverSocket.getLocalAddress().getHostAddress());
-                Mensagem.setRecebidas(serverSocket, recebidas); //Trata as mensagens recebidas e envia o ACK para o cliente
+               Mensagem.sendACK(serverSocket,ip_port_peers);
 
             }
 
