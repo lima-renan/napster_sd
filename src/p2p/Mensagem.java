@@ -96,14 +96,10 @@ public class Mensagem {
     }
 
     // Envia o ACK para o peer
-    public static void setACK (Mensagem msg, DatagramPacket recPkt, DatagramSocket serverSocket) throws IOException{
+    public static void setACK (String msg, DatagramPacket recPkt, DatagramSocket serverSocket) throws IOException{
         byte[] sendBuf = new byte[1024]; // Buffer para armazenar os bytes do ACK
 
-        Gson gsonsend = new Gson(); // Objeto para armazernar a string json que será enviada no CAK
-
-        String sendmsgudp = gsonsend.toJson(msg); // converte a mensagem em json
-
-        sendBuf = sendmsgudp.getBytes(); //Prepara o buffer
+        sendBuf = msg.getBytes(); //Prepara o buffer com a String que o servidor vai enviar
 
         InetAddress IPAddress = recPkt.getAddress();
 
@@ -115,15 +111,9 @@ public class Mensagem {
     }
 
     // Trata as mensagens recebidas dos peers e envia um ACK
-    public static void sendACK (DatagramSocket serverSocket, HashMap<InetAddress, Integer> ip_port_peers) throws IOException{
+    public static void sendACK (DatagramSocket serverSocket, DatagramPacket recPkt, HashMap<String, Integer> ip_port_peers) throws IOException{
 
         Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do cliente
-
-        byte[] recBuffer = new byte[1024];
-
-        DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length);
-
-        serverSocket.receive(recPkt); //BLOCKING
 
         String informacao = new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength()); //Datagrama do cliente é convertido em String json
 
@@ -131,19 +121,18 @@ public class Mensagem {
         // verifica a comunicação do peer
         if((msg.getOption()).equals("JOIN")){
             if(ip_port_peers.containsKey(msg.getIp())){ // se já houver algum peer com o mesmo IP, o JOIN é negado
-                msg.setOption("JOIN_DENIED");
-                setACK(msg, recPkt, serverSocket); // envia o ACK para o cliente
+                setACK("JOIN_DENIED", recPkt, serverSocket); // envia o ACK para o cliente
             }
             else{
-                msg.setOption("JOIN_OK");
-                ip_port_peers.put(InetAddress.getByName(msg.getIp()), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
-                setACK(msg, recPkt, serverSocket); // envia o ACK para o cliente
+                ip_port_peers.put(msg.getIp(), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
+                setACK("JOIN_OK", recPkt, serverSocket); // envia string ACK para o cliente
+                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + msg.getFiles());
             }
         }
     }
 
     //Recebe o ACK do Servidor e retorna a Mensagem com detalhes da conexão
-    public static Mensagem ACKfromServer (DatagramSocket clientSocket) throws IOException{
+    public static String ACKfromServer (DatagramSocket clientSocket) throws IOException{
 
         clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio pelo setEnvio()
 
@@ -153,10 +142,7 @@ public class Mensagem {
 
         clientSocket.receive(recPkt); // recebe o pacote do servidor
 
-        String informacao = new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength()); //obtem a mensagem no formato json string
-
-        Gson recgson = new Gson(); // instância para gerar a string json de recebimento
-        Mensagem msg = recgson.fromJson(informacao, Mensagem.class); //converte a string json em mensagem
+        String msg = new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength()); //obtem a string de resposta do servidor
 
         return msg;
 

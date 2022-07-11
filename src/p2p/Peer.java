@@ -1,7 +1,9 @@
 package p2p;
 
 import java.io.IOException; // biblioteca para execções
-import java.net.*;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketTimeoutException;
 import java.util.HashMap; // biblioteca para criar hash
 
 // bibliotecas para troca de dados utilizando o TCP
@@ -17,38 +19,44 @@ import java.util.concurrent.ThreadLocalRandom;
 public class Peer {
 
     //Gera um IPv4 e uma porta aleatória para o Peer
-    public static Mensagem IpConfig() throws UnknownHostException {
+    public static Mensagem IpConfig() throws IOException {
         //long millis = System.currentTimeMillis();
-        Random r = new Random();
-        // gera números aleatórios entre 1 e 255 para em seguida gerar uma string de IPs
-        String ip = r.nextInt(255 + 1) + "." + r.nextInt(255 + 1) + "." + r.nextInt(255 + 1) + "." + r.nextInt(255 + 1);
+
+        // gera números aleatórios entre 10 e 240 para em seguida gerar uma string de IPs
+        String ip = ThreadLocalRandom.current().nextInt(10,240 + 1) + "." + ThreadLocalRandom.current().nextInt(255 + 1) + "." + ThreadLocalRandom.current().nextInt(255 + 1) + "." + ThreadLocalRandom.current().nextInt(255 + 1);
         // gera um valor númerico entre 1024 e 65535 incluindo os dois extremos
         int port = ThreadLocalRandom.current().nextInt(1024, 65535+1);
-        // Socket s do peer terá IP entre 1.1.1.1 e 255.255.255.255 e uma porta designada entre 1024 e 65535
+        // Socket s do peer terá IP entre 10.0.0.0 e 240.255.255.255 e uma porta designada entre 1024 e 65535
         //System.out.println("IP: " + ip + " porta: " + port);
         Mensagem ipconfig = new Mensagem(ip,port);
         return ipconfig;
     }
 
-    // estabelece a conexão UDP entre o Peer e o Servidor
-    public static void conectToServer() throws IOException {
+    public static void tryJOIN (DatagramSocket clientSocket, Mensagem peer) throws IOException {
         InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
         int serverPort = 10098; // porta do Servidorpara conectar com os peers
-        Mensagem peer = IpConfig();
-        DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
+        peer = IpConfig();
         peer.setOption("JOIN"); // atribuí a opção de JOIN a opção
         String sendJson = Mensagem.preparaJson(peer); //Cria JSON com os dados do peer
-        Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort);
+        Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
+        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o srvidor, caso não haja retorno, ocorre erro de timeout
         try {
-            Mensagem answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
-            if ((answer.getOption()).equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
-                System.out.println("Sou peer " + (answer.getIp()) + ":" + answer.getPort() + " com arquivos " + answer.getFiles());
+            String answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
+            if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
+                System.out.println("Sou peer " + (peer.getIp()) + ":" + peer.getPort() + " com arquivos " + peer.getFiles());
+                clientSocket.close();
             } else { // Caso contrário, uma nova tentativa é feita com outro IP
-                Peer.conectToServer();
+                tryJOIN(clientSocket,peer);
             }
-
-        } catch(SocketTimeoutException e){
+        }catch(SocketTimeoutException e){
         }
+    }
+
+    // estabelece a conexão UDP entre o Peer e o Servidor
+    public static void conectToServer() throws IOException {
+        DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
+        Mensagem peer = new Mensagem(); // gera mensagem que para armezenar dados do peer
+        tryJOIN(clientSocket,peer); // prepara a mensagem e tenta o JOIN com o Servidor
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
