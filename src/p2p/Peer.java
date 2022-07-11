@@ -39,7 +39,7 @@ public class Peer {
         peer.setOption("JOIN"); // atribuí a opção de JOIN a opção
         String sendJson = Mensagem.preparaJson(peer); //Cria JSON com os dados do peer
         Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
-        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o srvidor, caso não haja retorno, ocorre erro de timeout
+        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o servidor, caso não haja retorno, uma nova tentativa é feita
         try {
             String answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
             if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
@@ -49,6 +49,7 @@ public class Peer {
                 tryJOIN(clientSocket,peer);
             }
         }catch(SocketTimeoutException e){
+            tryJOIN(clientSocket,peer); // Nova tentativa de join com o servidor
         }
     }
 

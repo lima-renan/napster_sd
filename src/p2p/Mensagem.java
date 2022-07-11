@@ -134,8 +134,6 @@ public class Mensagem {
     //Recebe o ACK do Servidor e retorna a Mensagem com detalhes da conexão
     public static String ACKfromServer (DatagramSocket clientSocket) throws IOException{
 
-        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio pelo setEnvio()
-
         byte[] recBuffer = new byte[1024]; // buffer de recebimento
 
         DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length); // cria pacote de recebimento
