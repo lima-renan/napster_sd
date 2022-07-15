@@ -16,6 +16,7 @@ public class Mensagem {
     private String option; //Operação
     private String[] files; //arquivos
 
+
     // Construtores da classe
     public Mensagem() {
 
@@ -37,7 +38,7 @@ public class Mensagem {
         this.option = option;
     }
 
-    //Mensagem completa
+    //Mensagem com arquivos
     public Mensagem(String ip, int port, String option, String[] files) {
         this.ip = ip;
         this.port = port;
@@ -46,8 +47,8 @@ public class Mensagem {
     }
 
 
-    // Métodos setters e getters
 
+    // Métodos setters e getters
     public String getIp() {
         return this.ip;
     }
@@ -76,9 +77,9 @@ public class Mensagem {
         this.option = option;
     }
 
-    public void setFiles(String[] file) {
-        this.files = file;
-    }
+    public void setFiles(String[] files) { this.files = files; }
+
+
 
     // Cria objeto que recebe o cabeçalho da mensagem que será enviada e retorna uma string json
     public static String preparaJson (Mensagem msg){
@@ -145,6 +146,32 @@ public class Mensagem {
         return msg;
 
     }
+}
+
+// Adiciona a pasta do peer na mensagem
+class Especificacoes extends Mensagem {
+    private String folder; //Endereço da apsta com os arquivos
+
+    //Construtores
+    public Especificacoes() {
+
+    }
+    public Especificacoes (String ip, int port, String option, String[] files, String folder) {
+        this.setIp(ip);
+        this.setPort(port);
+        this.setOption(option);
+        this.setFiles(files);
+        this.folder = folder;
+    }
+
+
+// Método get
+    public String getFolder() {
+        return this.folder;
+    }
+
+// Método set
+    public void setFolder(String folder) { this.folder = folder; }
 }
     /*
     // Boas-vindas: Captura a mensagem que o usuário deseja enviar

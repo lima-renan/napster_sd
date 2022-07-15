@@ -1,33 +1,36 @@
 package p2p;
 
-import java.io.IOException; // biblioteca para execções
+import java.io.*;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap; // biblioteca para criar hash
 
 // bibliotecas para troca de dados utilizando o TCP
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
-
+import java.util.List;
+import java.util.Scanner;
+import java.util.stream.Collectors;
 
 
 public class Peer {
 
-    //Gera um IPv4 e uma porta aleatória para o Peer
-    public static Mensagem IpConfig() throws IOException {
-        //long millis = System.currentTimeMillis();
+    //Solicita um IPv4, uma porta e uma pasta para o Peer, os quais devem der inseridos pelo teclado
+    public static Mensagem PeerConfig() throws IOException {
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("Digite um IPv4 (0.0.0.0 a 255.255.255.255): ");
+        String ip = keyboard.next();
+        System.out.println("Digite uma porta (entre 1024 e 65535): ");
+        int port = keyboard.nextInt();
+        System.out.println("Digite o endereço da pasta onde se encontram os arquivos: ");
+        String folder = keyboard.next();
 
-        // gera números aleatórios entre 10 e 240 para em seguida gerar uma string de IPs
-        String ip = ThreadLocalRandom.current().nextInt(10,240 + 1) + "." + ThreadLocalRandom.current().nextInt(255 + 1) + "." + ThreadLocalRandom.current().nextInt(255 + 1) + "." + ThreadLocalRandom.current().nextInt(255 + 1);
-        // gera um valor númerico entre 1024 e 65535 incluindo os dois extremos
-        int port = ThreadLocalRandom.current().nextInt(1024, 65535+1);
-        // Socket s do peer terá IP entre 10.0.0.0 e 240.255.255.255 e uma porta designada entre 1024 e 65535
-        //System.out.println("IP: " + ip + " porta: " + port);
+        List<File> filesInFolder = Files.walk(Paths.get(folder))
+                .filter(Files::isRegularFile)
+                .map(Path::toFile)
+                .collect(Collectors.toList());
         Mensagem ipconfig = new Mensagem(ip,port);
         return ipconfig;
     }
@@ -35,7 +38,7 @@ public class Peer {
     public static void tryJOIN (DatagramSocket clientSocket, Mensagem peer) throws IOException {
         InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
         int serverPort = 10098; // porta do Servidorpara conectar com os peers
-        peer = IpConfig();
+        peer = PeerConfig();
         peer.setOption("JOIN"); // atribuí a opção de JOIN a opção
         String sendJson = Mensagem.preparaJson(peer); //Cria JSON com os dados do peer
         Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
