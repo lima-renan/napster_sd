@@ -1,10 +1,12 @@
 package p2p;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.util.ArrayList;
+import java.net.SocketTimeoutException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Scanner;
 import com.google.gson.Gson;
@@ -127,7 +129,7 @@ public class Mensagem {
             else{
                 ip_port_peers.put(msg.getIp(), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
                 setACK("JOIN_OK", recPkt, serverSocket); // envia string ACK para o cliente
-                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + msg.getFiles());
+                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + Arrays.toString(msg.getFiles()));
             }
         }
     }
@@ -146,6 +148,44 @@ public class Mensagem {
         return msg;
 
     }
+
+    //Solicita um IPv4, uma porta e uma pasta para o Peer, os quais devem der inseridos pelo teclado
+    public static Especificacoes PeerConfig() throws IOException {
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("Digite um IPv4 (0.0.0.0 a 255.255.255.255): ");
+        String ip = keyboard.next(); //váriavel que captura o IPv4 do peer
+        System.out.println("Digite uma porta (entre 1024 e 65535): ");
+        int port = keyboard.nextInt(); //váriavel que captura a porta do peer
+        System.out.println("Digite o endereço da pasta onde se encontram os arquivos: ");
+        String folder = keyboard.next(); //váriavel que captura o endereço do diretório
+        File dir = new File(folder); // Armazena os arquivos da pasta
+        String[] files = dir.list(); // lsita os arquivos do diretório
+        Arrays.sort(files); // ordena o array
+        Especificacoes peer = new Especificacoes(ip,port,files,folder); //especificacoes do peer
+        return peer;
+    }
+
+    public static void tryJOIN (DatagramSocket clientSocket) throws IOException {
+        InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
+        int serverPort = 10098; // porta do Servidorpara conectar com os peers
+        Especificacoes peer = PeerConfig();
+        peer.setOption("JOIN"); // atribuí a opção de JOIN a opção
+        Mensagem msgServer = new Mensagem(peer.getIp(),peer.getPort(),peer.getOption(),peer.getFiles());
+        String sendJson = Mensagem.preparaJson(msgServer); //Cria JSON com os dados do peer
+        Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
+        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o servidor, caso não haja retorno, uma nova tentativa é feita
+        try {
+            String answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
+            if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
+                System.out.println("Sou peer " + (msgServer.getIp()) + ":" + msgServer.getPort() + " com arquivos " + Arrays.toString(msgServer.getFiles()));
+                clientSocket.close();
+            } else { // Caso contrário, uma nova tentativa é feita e solicita-se novamente os dados do peer
+                tryJOIN(clientSocket);
+            }
+        }catch(SocketTimeoutException e){
+            tryJOIN(clientSocket); // Nova tentativa de join com o servidor depois do timeout
+        }
+    }
 }
 
 // Adiciona a pasta do peer na mensagem
@@ -156,6 +196,13 @@ class Especificacoes extends Mensagem {
     public Especificacoes() {
 
     }
+    public Especificacoes (String ip, int port, String[] files, String folder) {
+        this.setIp(ip);
+        this.setPort(port);
+        this.setFiles(files);
+        this.folder = folder;
+    }
+
     public Especificacoes (String ip, int port, String option, String[] files, String folder) {
         this.setIp(ip);
         this.setPort(port);

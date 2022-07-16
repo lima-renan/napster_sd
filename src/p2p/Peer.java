@@ -1,66 +1,17 @@
 package p2p;
 
-import java.io.*;
+import java.io.IOException;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketTimeoutException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.HashMap; // biblioteca para criar hash
 
-// bibliotecas para troca de dados utilizando o TCP
-import java.util.List;
-import java.util.Scanner;
-import java.util.stream.Collectors;
+
 
 
 public class Peer {
 
-    //Solicita um IPv4, uma porta e uma pasta para o Peer, os quais devem der inseridos pelo teclado
-    public static Mensagem PeerConfig() throws IOException {
-        Scanner keyboard = new Scanner(System.in);
-        System.out.println("Digite um IPv4 (0.0.0.0 a 255.255.255.255): ");
-        String ip = keyboard.next();
-        System.out.println("Digite uma porta (entre 1024 e 65535): ");
-        int port = keyboard.nextInt();
-        System.out.println("Digite o endereço da pasta onde se encontram os arquivos: ");
-        String folder = keyboard.next();
-
-        List<File> filesInFolder = Files.walk(Paths.get(folder))
-                .filter(Files::isRegularFile)
-                .map(Path::toFile)
-                .collect(Collectors.toList());
-        Mensagem ipconfig = new Mensagem(ip,port);
-        return ipconfig;
-    }
-
-    public static void tryJOIN (DatagramSocket clientSocket, Mensagem peer) throws IOException {
-        InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
-        int serverPort = 10098; // porta do Servidorpara conectar com os peers
-        peer = PeerConfig();
-        peer.setOption("JOIN"); // atribuí a opção de JOIN a opção
-        String sendJson = Mensagem.preparaJson(peer); //Cria JSON com os dados do peer
-        Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
-        clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o servidor, caso não haja retorno, uma nova tentativa é feita
-        try {
-            String answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
-            if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
-                System.out.println("Sou peer " + (peer.getIp()) + ":" + peer.getPort() + " com arquivos " + peer.getFiles());
-                clientSocket.close();
-            } else { // Caso contrário, uma nova tentativa é feita com outro IP
-                tryJOIN(clientSocket,peer);
-            }
-        }catch(SocketTimeoutException e){
-            tryJOIN(clientSocket,peer); // Nova tentativa de join com o servidor
-        }
-    }
-
     // estabelece a conexão UDP entre o Peer e o Servidor
     public static void conectToServer() throws IOException {
         DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
-        Mensagem peer = new Mensagem(); // gera mensagem que para armezenar dados do peer
-        tryJOIN(clientSocket,peer); // prepara a mensagem e tenta o JOIN com o Servidor
+        Mensagem.tryJOIN(clientSocket); // prepara a mensagem e tenta o JOIN com o Servidor
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
