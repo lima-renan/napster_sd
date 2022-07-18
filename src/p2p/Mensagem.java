@@ -6,9 +6,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Scanner;
+import java.util.*;
+
 import com.google.gson.Gson;
 
 // Cabeçalho que será usado para as mensagens
@@ -114,7 +113,7 @@ public class Mensagem {
     }
 
     // Trata as mensagens recebidas dos peers e envia um ACK
-    public static void sendACK (DatagramSocket serverSocket, DatagramPacket recPkt, HashMap<String, Integer> ip_port_peers) throws IOException{
+    public static void sendACK (DatagramSocket serverSocket, DatagramPacket recPkt, HashMap<String, Integer> ip_port_peers, HashMap<String,  ArrayList<String>> files_peers) throws IOException{
 
         Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do cliente
 
@@ -128,8 +127,21 @@ public class Mensagem {
             }
             else{
                 ip_port_peers.put(msg.getIp(), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
+                String[] files = msg.getFiles(); // váriavel com todos os arquivos do peer
+                for(int i=0; i<files.length; i++) {
+                    if (files_peers.get(files[i]) == null) { // se não houver o arquivo no HashMap, uma nova entrada é adicionada
+                        ArrayList<String> ips = new ArrayList<String> ();
+                        ips.add(msg.getIp());
+                        files_peers.put(files[i],ips); // Um array com o IP do peer que contêm o arquivo é adicionado
+                    }
+                    else{
+                        files_peers.get(files[i]).add(msg.getIp()); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
+                    }
+                }
                 setACK("JOIN_OK", recPkt, serverSocket); // envia string ACK para o cliente
                 System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + Arrays.toString(msg.getFiles()));
+                /*System.out.println(Arrays.asList(ip_port_peers));
+                System.out.println(Arrays.asList(files_peers));*/
             }
         }
     }
