@@ -111,27 +111,41 @@ public class Mensagem {
 
         Mensagem msg = recgson.fromJson(informacao,Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
         // verifica a comunicação do peer
-        if((msg.getOption()).equals("JOIN")){
-            if(ip_port_peers.containsKey(msg.getIp())){ // se já houver algum peer com o mesmo IP, o JOIN é negado
-                setACK("JOIN_DENIED", recPkt, serverSocket); // envia o ACK para o cliente
-            }
-            else{
-                ip_port_peers.put(msg.getIp(), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
+        switch (msg.getOption()) {
+            case "JOIN":
+                if(ip_port_peers.containsKey(msg.getIp())){ // se já houver algum peer com o mesmo IP, o JOIN é negado
+                    setACK("JOIN_DONE", recPkt, serverSocket); // envia o ACK para o cliente
+                }
+                else {
+                    ip_port_peers.put(msg.getIp(), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
+                    String[] files = msg.getFiles(); // váriavel com todos os arquivos do peer
+                    for (String file : files) { // verifica todos os arquivos
+                        if (files_peers.get(file) == null) { // se não houver o arquivo no HashMap, uma nova entrada é adicionada
+                            ArrayList<String> ips = new ArrayList<>();
+                            ips.add((msg.getIp() + ":" + msg.getPort())); //concatena o Ip com a porta do peer
+                            files_peers.put(file, ips); // Um array com o IP do peer que contêm o arquivo é adicionado
+                        } else {
+                            files_peers.get(file).add((msg.getIp() + ":" + msg.getPort())); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
+                        }
+                    }
+                    setACK("JOIN_OK", recPkt, serverSocket); // envia string ACK para o cliente
+                    System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + Arrays.toString(msg.getFiles())); // imprime no prompt do servidor
+                   /* System.out.println(Arrays.asList(ip_port_peers));
+                    System.out.println(Arrays.asList(files_peers));*/
+                }
+                break;
+            case "LEAVE":
+                ip_port_peers.remove(msg.getIp());
                 String[] files = msg.getFiles(); // váriavel com todos os arquivos do peer
                 for (String file : files) { // verifica todos os arquivos
-                    if (files_peers.get(file) == null) { // se não houver o arquivo no HashMap, uma nova entrada é adicionada
-                        ArrayList<String> ips = new ArrayList<>();
-                        ips.add((msg.getIp() + ":" + msg.getPort())); //concatena o Ip com a porta do peer
-                        files_peers.put(file, ips); // Um array com o IP do peer que contêm o arquivo é adicionado
-                    } else {
-                        files_peers.get(file).add((msg.getIp() + ":" + msg.getPort())); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
-                    }
+                    files_peers.get(file).remove((msg.getIp() + ":" + msg.getPort())); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
                 }
-                setACK("JOIN_OK", recPkt, serverSocket); // envia string ACK para o cliente
-                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + Arrays.toString(msg.getFiles())); // imprime no prompt do servidor
-               /* System.out.println(Arrays.asList(ip_port_peers));
-                System.out.println(Arrays.asList(files_peers));*/
-            }
+                /*System.out.println(Arrays.asList(ip_port_peers));
+                System.out.println(Arrays.asList(files_peers));
+                System.out.println("teste");*/
+                setACK("LEAVE_OK", recPkt, serverSocket); // envia string ACK para o cliente
+
+
         }
     }
 
@@ -182,7 +196,28 @@ public class Mensagem {
         msgServer.setComment(ip); // atualiza a mensagem com os dados do peer que contém o arquivo
     }
 
-    // Tenta um retorno do Servidor para o JOIN, LEAVE, SEARCH ou DOWNLOAD - Recebe o DatagramSocket e a opção de comunicação desejada
+    // Menu
+
+    public static void menu (Especificacoes peer, DatagramSocket clientSocket) throws IOException {
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("Digite o que deseja fazer: ");
+        int name = keyboard.nextInt(); //váriavel com o nome do arquivo que será buscado
+        switch (name){
+            case 1:
+                if(clientSocket.isClosed()) {
+                    tryConect(peer, clientSocket, "JOIN");
+                }
+                else{
+                    System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + Arrays.toString(peer.getFiles())); // imprime as informações do Peer
+                }
+                break;
+            case 2:
+                tryConect(peer,clientSocket, "LEAVE");
+                break;
+        }
+    }
+
+    // Tenta um retorno do Servidor para o JOIN, LEAVE ou SEARCH - Recebe o DatagramSocket e a opção de comunicação desejada
     public static void tryConect (Especificacoes peer, DatagramSocket clientSocket, String opt) throws IOException {
         InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
         int serverPort = 10098; // porta do Servidor para conectar com os peers
@@ -200,6 +235,7 @@ public class Mensagem {
                 msgServer.setIp(peer.getIp());
                 msgServer.setPort(peer.getPort());
                 msgServer.setOption(opt);
+                msgServer.setFiles(peer.getFiles()); // envia o nome dos arquivos para serem removidos do servidor
                 break;
 
             case "SEARCH": //Coloca os dados necessários para o SEARCH
@@ -223,22 +259,15 @@ public class Mensagem {
             String answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
             switch (opt) {
                 case "JOIN":
-                    if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
-                        System.out.println("Sou peer " + msgServer.getIp() + ":" + msgServer.getPort() + " com arquivos " + Arrays.toString(msgServer.getFiles()));
-                        clientSocket.close();
-                    }
-                    else { // Caso contrário, uma nova tentativa é feita e solicita-se novamente os dados do peer
-                        tryConect(peer,clientSocket, "JOIN");
-                    }
+                    System.out.println("Sou peer " + msgServer.getIp() + ":" + msgServer.getPort() + " com arquivos " + Arrays.toString(msgServer.getFiles())); // imprime as informações do Peer
                     break;
-
                 case "LEAVE":
                     if (answer.equals("LEAVE_OK")) { // Se o LEAVE for aceito pelo servidor, a conexão é encerrada
-                        clientSocket.close();
+                        clientSocket.close(); // quando receber a confirmação fecha o socket com o servidor
                     }
                     break;
             }
-        }catch(SocketTimeoutException e){
+        }catch(SocketTimeoutException e){ // trata o timeout
             switch (opt) {
                 case "JOIN":
                     tryConect(peer,clientSocket, "JOIN"); // Nova tentativa de JOIN com o servidor depois do timeout

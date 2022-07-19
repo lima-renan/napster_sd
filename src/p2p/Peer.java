@@ -12,9 +12,8 @@ public class Peer {
         Especificacoes peer = new Especificacoes(); // Cria estrutura para receber especificações do peer
         DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
         Mensagem.tryConect(peer,clientSocket, "JOIN"); // prepara a mensagem e tenta o JOIN com o Servidor
-        //Mensagem.tryConect(peer,clientSocket,"LEAVE"); // prepara a mensagem e tenta o LEAVE com o Servidor
         while(true){
-
+            Mensagem.menu(peer,clientSocket); // exibe o menu de opções: JOIN, LEAVE, SEARCH E DOWNLOAD
             continue;
         }
 
