@@ -8,18 +8,15 @@ import java.net.DatagramSocket;
 
 public class Peer {
 
-    // estabelece a conexão UDP entre o Peer e o Servidor
-    public static void conectToServer() throws IOException {
-        DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
-        Mensagem.tryJOIN(clientSocket); // prepara a mensagem e tenta o JOIN com o Servidor
-    }
-
     public static void main(String[] args) throws IOException, InterruptedException {
-            conectToServer();
-            while(true){
+        Especificacoes peer = new Especificacoes(); // Cria estrutura para receber especificações do peer
+        DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
+        Mensagem.tryConect(peer,clientSocket, "JOIN"); // prepara a mensagem e tenta o JOIN com o Servidor
+        //Mensagem.tryConect(peer,clientSocket,"LEAVE"); // prepara a mensagem e tenta o LEAVE com o Servidor
+        while(true){
 
-                continue;
-            }
+            continue;
+        }
 
     }
 }

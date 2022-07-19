@@ -16,27 +16,12 @@ public class Mensagem {
     private int port; //Porta do Peer
     private String option; //Operação
     private String[] files; //arquivos
+    private String comment; //utilizado para SEARCH, UPDATE ou DOWNLOAD
 
 
     // Construtores da classe
     public Mensagem() {
 
-    }
-
-    public Mensagem(String ip) {
-        this.ip = ip;
-    }
-
-    public Mensagem(String ip, int port) {
-        this.ip = ip;
-        this.port = port;
-    }
-
-    //Mensagem de JOIN
-    public Mensagem(String ip, int port, String option) {
-        this.ip = ip;
-        this.port = port;
-        this.option = option;
     }
 
     //Mensagem com arquivos
@@ -66,6 +51,10 @@ public class Mensagem {
         return this.files;
     }
 
+    public String getComment() {
+        return this.comment;
+    }
+
     public void setIp(String ip) {
         this.ip = ip;
     }
@@ -79,19 +68,20 @@ public class Mensagem {
     }
 
     public void setFiles(String[] files) { this.files = files; }
+    public void setComment(String comment) { this.comment = comment; }
+
 
 
 
     // Cria objeto que recebe o cabeçalho da mensagem que será enviada e retorna uma string json
     public static String preparaJson (Mensagem msg){
         Gson sendgson = new Gson(); // instância para gerar a string json de envio
-        String jmsgudp = sendgson.toJson(msg); // converte a mensagem em string json para envio
-        return jmsgudp;
+        return sendgson.toJson(msg);
     }
 
     // Envia o pacote com a mensagem no formato JSON através do socket para o IP e Porta do Servidor (127.0.0.1:10098)
     public static void enviaPacket (String jsonMsg, DatagramSocket clientSocket, InetAddress ipServer, int portServer) throws IOException{
-        byte[] sendData = new byte [1024]; // buffer de envio
+        byte[] sendData; // buffer de envio
         sendData = (jsonMsg).getBytes();
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, ipServer, portServer); //cria datagrama de envio
         clientSocket.send(sendPacket); // envia pacote com a mensagem
@@ -99,7 +89,7 @@ public class Mensagem {
 
     // Envia o ACK para o peer
     public static void setACK (String msg, DatagramPacket recPkt, DatagramSocket serverSocket) throws IOException{
-        byte[] sendBuf = new byte[1024]; // Buffer para armazenar os bytes do ACK
+        byte[] sendBuf; // Buffer para armazenar os bytes do ACK
 
         sendBuf = msg.getBytes(); //Prepara o buffer com a String que o servidor vai enviar
 
@@ -128,19 +118,18 @@ public class Mensagem {
             else{
                 ip_port_peers.put(msg.getIp(), msg.getPort()); // Adiciona o IP e a porta do peer na lista do HashMap
                 String[] files = msg.getFiles(); // váriavel com todos os arquivos do peer
-                for(int i=0; i<files.length; i++) {
-                    if (files_peers.get(files[i]) == null) { // se não houver o arquivo no HashMap, uma nova entrada é adicionada
-                        ArrayList<String> ips = new ArrayList<String> ();
-                        ips.add(msg.getIp());
-                        files_peers.put(files[i],ips); // Um array com o IP do peer que contêm o arquivo é adicionado
-                    }
-                    else{
-                        files_peers.get(files[i]).add(msg.getIp()); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
+                for (String file : files) { // verifica todos os arquivos
+                    if (files_peers.get(file) == null) { // se não houver o arquivo no HashMap, uma nova entrada é adicionada
+                        ArrayList<String> ips = new ArrayList<>();
+                        ips.add((msg.getIp() + ":" + msg.getPort())); //concatena o Ip com a porta do peer
+                        files_peers.put(file, ips); // Um array com o IP do peer que contêm o arquivo é adicionado
+                    } else {
+                        files_peers.get(file).add((msg.getIp() + ":" + msg.getPort())); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
                     }
                 }
                 setACK("JOIN_OK", recPkt, serverSocket); // envia string ACK para o cliente
-                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + Arrays.toString(msg.getFiles()));
-                /*System.out.println(Arrays.asList(ip_port_peers));
+                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " adicionado com arquivos " + Arrays.toString(msg.getFiles())); // imprime no prompt do servidor
+               /* System.out.println(Arrays.asList(ip_port_peers));
                 System.out.println(Arrays.asList(files_peers));*/
             }
         }
@@ -155,59 +144,118 @@ public class Mensagem {
 
         clientSocket.receive(recPkt); // recebe o pacote do servidor
 
-        String msg = new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength()); //obtem a string de resposta do servidor
-
-        return msg;
+        return new String(recPkt.getData(),recPkt.getOffset(),recPkt.getLength());
 
     }
 
     //Solicita um IPv4, uma porta e uma pasta para o Peer, os quais devem der inseridos pelo teclado
-    public static Especificacoes PeerConfig() throws IOException {
+    public static void PeerConfig(Especificacoes peer) {
         Scanner keyboard = new Scanner(System.in);
-        System.out.println("Digite um IPv4 (0.0.0.0 a 255.255.255.255): ");
-        String ip = keyboard.next(); //váriavel que captura o IPv4 do peer
-        System.out.println("Digite uma porta (entre 1024 e 65535): ");
-        int port = keyboard.nextInt(); //váriavel que captura a porta do peer
+        System.out.println("Digite seu IPv4 e a porta(entre 1024 e 65535) para conexão (e.g., 0.0.0.0:0000) : ");
+        String ip = keyboard.next(); //váriavel que captura o IPv4 e a porta do peer
         System.out.println("Digite o endereço da pasta onde se encontram os arquivos: ");
         String folder = keyboard.next(); //váriavel que captura o endereço do diretório
         File dir = new File(folder); // Armazena os arquivos da pasta
         String[] files = dir.list(); // lsita os arquivos do diretório
-        Arrays.sort(files); // ordena o array
-        Especificacoes peer = new Especificacoes(ip,port,files,folder); //especificacoes do peer
-        return peer;
+        if (files != null) {
+            Arrays.sort(files); // ordena o array
+        }
+        String[] ipPort = ip.split(":"); //separa IP e porta em duas strings
+        //seta as especificações do peer
+        peer.setIp(ipPort[0]);
+        peer.setPort(Integer.parseInt(ipPort[1]));
+        peer.setFiles(files);
+        peer.setFolder(folder);
     }
 
-    public static void tryJOIN (DatagramSocket clientSocket) throws IOException {
+    public static void prepSearch (Mensagem msgServer){
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("Digite o nome do arquivo desejado com a extensão (e.g., aula.mp4): ");
+        String name = keyboard.next(); //váriavel com o nome do arquivo que será buscado
+        msgServer.setComment(name); // atualiza a mensagem com o nome do arquivo
+    }
+
+    public static void initDownload (Mensagem msgServer){
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("Digite o IPv4 e a porta do peer (e.g., 0.0.0.0:0000) que contém o arquivo para DOWNLOAD: ");
+        String ip = keyboard.next(); //váriavel que captura o IPv4 do peer
+        msgServer.setComment(ip); // atualiza a mensagem com os dados do peer que contém o arquivo
+    }
+
+    // Tenta um retorno do Servidor para o JOIN, LEAVE, SEARCH ou DOWNLOAD - Recebe o DatagramSocket e a opção de comunicação desejada
+    public static void tryConect (Especificacoes peer, DatagramSocket clientSocket, String opt) throws IOException {
         InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
-        int serverPort = 10098; // porta do Servidorpara conectar com os peers
-        Especificacoes peer = PeerConfig();
-        peer.setOption("JOIN"); // atribuí a opção de JOIN a opção
-        Mensagem msgServer = new Mensagem(peer.getIp(),peer.getPort(),peer.getOption(),peer.getFiles());
+        int serverPort = 10098; // porta do Servidor para conectar com os peers
+        Mensagem msgServer = new Mensagem();
+        switch (opt) { // Prepara a mensagem para enviar ao servidor
+            case "JOIN": //Coloca os dados necessários para o JOIN
+                PeerConfig(peer);
+                msgServer.setIp(peer.getIp());
+                msgServer.setPort(peer.getPort());
+                msgServer.setOption(opt);
+                msgServer.setFiles(peer.getFiles());
+                break;
+
+            case "LEAVE": //Coloca os dados necessários para o LEAVE
+                msgServer.setIp(peer.getIp());
+                msgServer.setPort(peer.getPort());
+                msgServer.setOption(opt);
+                break;
+
+            case "SEARCH": //Coloca os dados necessários para o SEARCH
+                prepSearch(msgServer);
+                msgServer.setIp(peer.getIp());
+                msgServer.setPort(peer.getPort());
+                msgServer.setOption(opt);
+                break;
+
+            case "DOWNLOAD": //Coloca os dados necessários para o SEARCH
+                initDownload(msgServer);
+                msgServer.setIp(peer.getIp());
+                msgServer.setPort(peer.getPort());
+                msgServer.setOption(opt);
+                break;
+        }
         String sendJson = Mensagem.preparaJson(msgServer); //Cria JSON com os dados do peer
         Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
         clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o servidor, caso não haja retorno, uma nova tentativa é feita
         try {
             String answer = Mensagem.ACKfromServer(clientSocket); // retorno do servidor
-            if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
-                System.out.println("Sou peer " + (msgServer.getIp()) + ":" + msgServer.getPort() + " com arquivos " + Arrays.toString(msgServer.getFiles()));
-                clientSocket.close();
-            } else { // Caso contrário, uma nova tentativa é feita e solicita-se novamente os dados do peer
-                tryJOIN(clientSocket);
+            switch (opt) {
+                case "JOIN":
+                    if (answer.equals("JOIN_OK")) { // Se o JOIN for aceito pelo servidor, o peer imprime a mensagem na console
+                        System.out.println("Sou peer " + msgServer.getIp() + ":" + msgServer.getPort() + " com arquivos " + Arrays.toString(msgServer.getFiles()));
+                        clientSocket.close();
+                    }
+                    else { // Caso contrário, uma nova tentativa é feita e solicita-se novamente os dados do peer
+                        tryConect(peer,clientSocket, "JOIN");
+                    }
+                    break;
+
+                case "LEAVE":
+                    if (answer.equals("LEAVE_OK")) { // Se o LEAVE for aceito pelo servidor, a conexão é encerrada
+                        clientSocket.close();
+                    }
+                    break;
             }
         }catch(SocketTimeoutException e){
-            tryJOIN(clientSocket); // Nova tentativa de join com o servidor depois do timeout
+            switch (opt) {
+                case "JOIN":
+                    tryConect(peer,clientSocket, "JOIN"); // Nova tentativa de JOIN com o servidor depois do timeout
+                    break;
+                case "LEAVE":
+                    tryConect(peer,clientSocket, "LEAVE"); // Nova tentativa de LEAVE com o servidor depois do timeout
+                    break;
+            }
         }
     }
+
 }
 
 // Adiciona a pasta do peer na mensagem
 class Especificacoes extends Mensagem {
     private String folder; //Endereço da apsta com os arquivos
 
-    //Construtores
-    public Especificacoes() {
-
-    }
     public Especificacoes (String ip, int port, String[] files, String folder) {
         this.setIp(ip);
         this.setPort(port);
@@ -215,16 +263,12 @@ class Especificacoes extends Mensagem {
         this.folder = folder;
     }
 
-    public Especificacoes (String ip, int port, String option, String[] files, String folder) {
-        this.setIp(ip);
-        this.setPort(port);
-        this.setOption(option);
-        this.setFiles(files);
-        this.folder = folder;
+    public Especificacoes() {
+
     }
 
 
-// Método get
+    // Método get
     public String getFolder() {
         return this.folder;
     }

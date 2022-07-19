@@ -16,9 +16,9 @@ public class Servidor {
 
             InetAddress addr = InetAddress.getByName("127.0.0.1"); // Define o IP do servidor
             DatagramSocket serverSocket;
-            serverSocket = new DatagramSocket(10098, addr); //porta default do servidor para comunicação com os peers
-            HashMap<String, Integer> ip_port_peers = new HashMap<String, Integer>(); // Cria um HashMap vazio para registrar os Ips e portas dos peers, onde a chave é o IP.
-            HashMap<String, ArrayList<String>> files_peers = new HashMap<String, ArrayList<String>>(); // Cria um HashMap vazio para registrar os arquivos dos peers, a chave é o nome do arquivo, para cada arquivo há um array com uma lista de IPs que representam os peers que possuem
+            serverSocket = new DatagramSocket(10098, addr); //porta padrão do servidor para comunicação com os peers
+            HashMap<String, Integer> ip_port_peers = new HashMap<>(); //Cria um HashMap vazio para registrar os Ips e portas dos peers, onde a chave é o IP.
+            HashMap<String, ArrayList<String>> files_peers = new HashMap<>(); // Cria um HashMap vazio para registrar os arquivos dos peers, a chave é o nome do arquivo, para cada arquivo há um array com uma lista de IPs que representam os peers que possuem
 
             // O Servidor permanece funcionando
             while (true) {
@@ -54,7 +54,7 @@ public class Servidor {
         }
 
         public void run() {
-
+            // As threads prestam atendimento aos peers, em caso de erro é exibida uma exceção
             try{
                 Mensagem.sendACK(sock,recPkt, ip_port_peers, files_peers);
             }
