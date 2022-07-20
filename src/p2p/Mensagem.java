@@ -6,7 +6,11 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Scanner;
+
 
 import com.google.gson.Gson;
 
@@ -70,8 +74,49 @@ public class Mensagem {
     public void setFiles(String[] files) { this.files = files; }
     public void setComment(String comment) { this.comment = comment; }
 
-
-
+    // Welcome - exibe mensagem assim que o peer é inicializado
+    public static void welcome(){
+        System.out.println("Projeto Napster: Peer inicializado" + "\n" +"\n");
+    }
+    // Menu com as opções de JOIN, LEAVE e SEARCH - retorna dados do datagrama da conexão com o servidor
+    public static DatagramSocket menu (Especificacoes peer, DatagramSocket clientSocket) throws IOException {
+        Scanner keyboard = new Scanner(System.in);
+        System.out.println("\nMenu: " + "\n" +
+                "   " + "1 - JOIN" + "\n" +
+                "   " + "2 - SEARCH" + "\n" +
+                "   " + "3 - DOWNLOAD" + "\n" +
+                "   " + "4 - LEAVE");
+        System.out.print( "Digite o número da opção desejada: ");
+        int name = keyboard.nextInt(); //váriavel com o nome do arquivo que será buscado
+        switch (name){
+            case 1: //JOIN
+                if(clientSocket.isClosed()) { // Verifica se o JOIN já foi feito, se sim imprime os dados na console, caso contrário, faz o JOIN com o servidor
+                    clientSocket = new DatagramSocket();
+                    tryConect(peer, clientSocket, "JOIN");
+                }
+                else{
+                    System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + Arrays.toString(peer.getFiles())); // imprime as informações do Peer
+                }
+                break;
+            case 2: //SEARCH
+                if(!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de SEARCH é enviada
+                    tryConect(peer, clientSocket, "SEARCH");
+                }
+                else{
+                    System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
+                }
+                break;
+            case 4: //LEAVE
+                if(!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de LEAVE é enviada
+                    tryConect(peer, clientSocket, "LEAVE");
+                }
+                else{
+                    System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
+                }
+                break;
+        }
+        return clientSocket;
+    }
 
     // Cria objeto que recebe o cabeçalho da mensagem que será enviada e retorna uma string json
     public static String preparaJson (Mensagem msg){
@@ -134,6 +179,10 @@ public class Mensagem {
                     System.out.println(Arrays.asList(files_peers));*/
                 }
                 break;
+            case "SEARCH":
+                System.out.println("Peer " + (msg.getIp()) + ":" + msg.getPort() + " solicitou arquivo " + msg.getComment()); // imprime no prompt do servidor o arquivo solicitado pelo peer
+                setACK(String.valueOf(files_peers.get(msg.getComment())), recPkt, serverSocket); // envia string ACK para o cliente com lista de IPs e Portas de peers que ppossuem o arquivo
+                break;
             case "LEAVE":
                 ip_port_peers.remove(msg.getIp());
                 String[] files = msg.getFiles(); // váriavel com todos os arquivos do peer
@@ -144,6 +193,8 @@ public class Mensagem {
                 System.out.println(Arrays.asList(files_peers));
                 System.out.println("teste");*/
                 setACK("LEAVE_OK", recPkt, serverSocket); // envia string ACK para o cliente
+                break;
+
 
 
         }
@@ -167,24 +218,58 @@ public class Mensagem {
         Scanner keyboard = new Scanner(System.in);
         System.out.println("Digite seu IPv4 e a porta(entre 1024 e 65535) para conexão (e.g., 0.0.0.0:0000) : ");
         String ip = keyboard.next(); //váriavel que captura o IPv4 e a porta do peer
-        System.out.println("Digite o endereço da pasta onde se encontram os arquivos: ");
-        String folder = keyboard.next(); //váriavel que captura o endereço do diretório
-        File dir = new File(folder); // Armazena os arquivos da pasta
-        String[] files = dir.list(); // lsita os arquivos do diretório
-        if (files != null) {
-            Arrays.sort(files); // ordena o array
+        try { //verifica se o formato do IP foi digitado corretamente
+            String[] ipPort = ip.split(":"); //separa IP e porta em duas strings
+            if(ipPort.length != 2){
+                System.err.println("Formato IP:Porta incorreto (não é do tipo 0.0.0.0:0000)"); // exibe mensagem de erro sobre formato incorreto do IP e Porta digitados
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
+            if(Integer.parseInt(ipPort[1]) < 1024 || Integer.parseInt(ipPort[1]) > 65535){
+                System.err.println("Intervalo da porta digitada é inválido (não está entre 1024 e 65535)"); // exibe mensagem de erro sobre intervalo da porta digitada
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
+            String[] ipName = ipPort[0].split("[\\.]");
+            if(ipName.length != 4 ) {
+                System.err.println("Formato do IP digitado é inválido (não é do tipo 0.0.0.0)"); // exibe erro se o IP não foi digitado corretamente - tamanho incorreto
+                throw new Exception("Exception thrown"); // lança uma exceção
+            } else  if((Integer.parseInt(ipName[0]) < 0 || Integer.parseInt(ipName[0]) > 255)
+                    || (Integer.parseInt(ipName[1]) < 0 || Integer.parseInt(ipName[1]) > 255)
+                    || (Integer.parseInt(ipName[2]) < 0 || Integer.parseInt(ipName[2]) > 255)
+                    || (Integer.parseInt(ipName[3]) < 0 || Integer.parseInt(ipName[3]) > 255) || ipName.length != 4 ) {
+                System.err.println("Intervalo do IP digitado é inválido (não está entre 0.0.0.0 e 255.255.255.255"); // exibe erro se o IP não foi digitado corretamente - fora do intervalo válido
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
+            System.out.println("Digite o endereço da pasta onde se encontram os arquivos: ");
+            String folder = keyboard.next(); //váriavel que captura o endereço do diretório
+            File dir = new File(folder); // Armazena os arquivos da pasta
+            if (dir.exists() && dir.isDirectory()) { //verifica se foi digitado um diretório válido
+                String[] files = dir.list(); // lista os arquivos do diretório
+                if (files != null) {
+                    Arrays.sort(files); // ordena o array
+                }
+                //seta as especificações do peer
+                peer.setIp(ipPort[0]);
+                peer.setPort(Integer.parseInt(ipPort[1]));
+                peer.setFiles(files);
+                peer.setFolder(folder);
+            }
+            else{
+                System.err.println("Diretório inválido"); // exibe erro se o diretório digitado não é válido
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
         }
-        String[] ipPort = ip.split(":"); //separa IP e porta em duas strings
-        //seta as especificações do peer
-        peer.setIp(ipPort[0]);
-        peer.setPort(Integer.parseInt(ipPort[1]));
-        peer.setFiles(files);
-        peer.setFolder(folder);
+        catch (Exception e) {
+            // se ocorrer erros durante o processamento dos dados fornecidos
+            System.err.println("Nova tentativa de conexão!"); //mensagem de warning sobre nova tentativa de conexão
+            PeerConfig(peer);
+        }
+
+
     }
 
     public static void prepSearch (Mensagem msgServer){
         Scanner keyboard = new Scanner(System.in);
-        System.out.println("Digite o nome do arquivo desejado com a extensão (e.g., aula.mp4): ");
+        System.out.print("Digite o nome do arquivo desejado com a extensão (e.g., aula.mp4): ");
         String name = keyboard.next(); //váriavel com o nome do arquivo que será buscado
         msgServer.setComment(name); // atualiza a mensagem com o nome do arquivo
     }
@@ -196,26 +281,7 @@ public class Mensagem {
         msgServer.setComment(ip); // atualiza a mensagem com os dados do peer que contém o arquivo
     }
 
-    // Menu
 
-    public static void menu (Especificacoes peer, DatagramSocket clientSocket) throws IOException {
-        Scanner keyboard = new Scanner(System.in);
-        System.out.println("Digite o que deseja fazer: ");
-        int name = keyboard.nextInt(); //váriavel com o nome do arquivo que será buscado
-        switch (name){
-            case 1:
-                if(clientSocket.isClosed()) {
-                    tryConect(peer, clientSocket, "JOIN");
-                }
-                else{
-                    System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + Arrays.toString(peer.getFiles())); // imprime as informações do Peer
-                }
-                break;
-            case 2:
-                tryConect(peer,clientSocket, "LEAVE");
-                break;
-        }
-    }
 
     // Tenta um retorno do Servidor para o JOIN, LEAVE ou SEARCH - Recebe o DatagramSocket e a opção de comunicação desejada
     public static void tryConect (Especificacoes peer, DatagramSocket clientSocket, String opt) throws IOException {
@@ -231,13 +297,6 @@ public class Mensagem {
                 msgServer.setFiles(peer.getFiles());
                 break;
 
-            case "LEAVE": //Coloca os dados necessários para o LEAVE
-                msgServer.setIp(peer.getIp());
-                msgServer.setPort(peer.getPort());
-                msgServer.setOption(opt);
-                msgServer.setFiles(peer.getFiles()); // envia o nome dos arquivos para serem removidos do servidor
-                break;
-
             case "SEARCH": //Coloca os dados necessários para o SEARCH
                 prepSearch(msgServer);
                 msgServer.setIp(peer.getIp());
@@ -250,6 +309,13 @@ public class Mensagem {
                 msgServer.setIp(peer.getIp());
                 msgServer.setPort(peer.getPort());
                 msgServer.setOption(opt);
+                break;
+
+            case "LEAVE": //Coloca os dados necessários para o LEAVE
+                msgServer.setIp(peer.getIp());
+                msgServer.setPort(peer.getPort());
+                msgServer.setOption(opt);
+                msgServer.setFiles(peer.getFiles()); // envia o nome dos arquivos para serem removidos do servidor
                 break;
         }
         String sendJson = Mensagem.preparaJson(msgServer); //Cria JSON com os dados do peer
@@ -266,6 +332,9 @@ public class Mensagem {
                         clientSocket.close(); // quando receber a confirmação fecha o socket com o servidor
                     }
                     break;
+                case "SEARCH":
+                    System.out.println("peers com arquivo solicitado " + answer); // imprime as informações do Peer
+                    break;
             }
         }catch(SocketTimeoutException e){ // trata o timeout
             switch (opt) {
@@ -274,6 +343,9 @@ public class Mensagem {
                     break;
                 case "LEAVE":
                     tryConect(peer,clientSocket, "LEAVE"); // Nova tentativa de LEAVE com o servidor depois do timeout
+                    break;
+                case "SEARCH":
+                    tryConect(peer,clientSocket, "SEARCH"); // Nova tentativa de SEARCH no servidor depois do timeout
                     break;
             }
         }
