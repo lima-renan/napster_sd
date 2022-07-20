@@ -79,7 +79,7 @@ public class Mensagem {
         System.out.println("Projeto Napster: Peer inicializado" + "\n" +"\n");
     }
     // Menu com as opções de JOIN, LEAVE e SEARCH - retorna dados do datagrama da conexão com o servidor
-    public static DatagramSocket menu (Especificacoes peer, DatagramSocket clientSocket) throws IOException {
+    public static DatagramSocket menu (Especificacoes peer, DatagramSocket clientSocket) {
         Scanner keyboard = new Scanner(System.in);
         System.out.println("\nMenu: " + "\n" +
                 "   " + "1 - JOIN" + "\n" +
@@ -87,33 +87,38 @@ public class Mensagem {
                 "   " + "3 - DOWNLOAD" + "\n" +
                 "   " + "4 - LEAVE");
         System.out.print( "Digite o número da opção desejada: ");
-        int name = keyboard.nextInt(); //váriavel com o nome do arquivo que será buscado
-        switch (name){
-            case 1: //JOIN
-                if(clientSocket.isClosed()) { // Verifica se o JOIN já foi feito, se sim imprime os dados na console, caso contrário, faz o JOIN com o servidor
-                    clientSocket = new DatagramSocket();
-                    tryConect(peer, clientSocket, "JOIN");
-                }
-                else{
-                    System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + Arrays.toString(peer.getFiles())); // imprime as informações do Peer
-                }
-                break;
-            case 2: //SEARCH
-                if(!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de SEARCH é enviada
-                    tryConect(peer, clientSocket, "SEARCH");
-                }
-                else{
-                    System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
-                }
-                break;
-            case 4: //LEAVE
-                if(!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de LEAVE é enviada
-                    tryConect(peer, clientSocket, "LEAVE");
-                }
-                else{
-                    System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
-                }
-                break;
+        try {
+            int opt = keyboard.nextInt(); //váriavel com o nome do arquivo que será buscado
+            if(opt > 4 || opt < 1){
+                throw new Exception("Exception thrown"); // lança uma exceção - entrada inválida
+            }
+            switch (opt) {
+                case 1: //JOIN
+                    if (clientSocket.isClosed()) { // Verifica se o JOIN já foi feito, se sim imprime os dados na console, caso contrário, faz o JOIN com o servidor
+                        clientSocket = new DatagramSocket();
+                        tryConect(peer, clientSocket, "JOIN");
+                    } else {
+                        System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + Arrays.toString(peer.getFiles())); // imprime as informações do Peer
+                    }
+                    break;
+                case 2: //SEARCH
+                    if (!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de SEARCH é enviada
+                        tryConect(peer, clientSocket, "SEARCH");
+                    } else {
+                        System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
+                    }
+                    break;
+                case 4: //LEAVE
+                    if (!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de LEAVE é enviada
+                        tryConect(peer, clientSocket, "LEAVE");
+                    } else {
+                        System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
+                    }
+                    break;
+            }
+        }
+        catch(Exception e) {
+            System.err.println("Opção inválida!"); //mensagem de warning sobre nova tentativa de conexão
         }
         return clientSocket;
     }
