@@ -1,25 +1,137 @@
 package p2p;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.util.ArrayList;
+
 
 
 
 
 public class Peer {
 
+    //Especificações do peer
+
+    private String ip;
+    private String port;
+    private ArrayList<String> files;
+    private String folder; //Endereço da apsta com os arquivos
+
+
+    // Métodos setters e getters
+    public String getIp(){ return this.ip;}
+
+    public String getPort(){ return this.port;}
+
+    public ArrayList<String> getFiles() {
+        return this.files;
+    }
+    public String getFolder() {
+        return this.folder;
+    }
+
+    public void setIp(String ip) { this.ip = ip; }
+
+    public void setPort(String port) { this.port = port; }
+
+    public void setFiles (ArrayList<String>files) { this.files = files; }
+    public void setFolder(String folder) { this.folder = folder; }
+
+
+    public Peer (){
+
+    }
+
+    public Peer(String ip, String port) {
+        this.setIp(ip);
+        this.setPort(port);
+    }
+
+    public Peer(String ip, String port, String folder) {
+        this.setIp(ip);
+        this.setPort(port);
+        this.setFolder(folder);
+    }
+
+    public Peer(String ip, String port, ArrayList<String> files, String folder) {
+        this.setIp(ip);
+        this.setPort(port);
+        this.setFiles(files);
+        this.setFolder(folder);
+    }
+
     public static void main(String[] args) throws IOException, InterruptedException {
-        Especificacoes peer = new Especificacoes(); // Cria estrutura para receber especificações do peer
+        Peer peer = new Peer(); // Cria estrutura para receber especificações do peer
         DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
+        byte[] recBuffer = new byte[1024]; // buffer de recebimento
+        DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length); // cria pacote de recebimento
         Mensagem.welcome(); // exibe mensagem de inicialização
-        Mensagem.tryConect(peer,clientSocket, "JOIN"); // prepara a mensagem e tenta o JOIN com o Servidor
-        while(true){
-            clientSocket = Mensagem.menu(peer,clientSocket); // exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE
-            continue;
+        Thread send = new PeerThreadSend(peer, clientSocket); // exibe o menu e envia através de threads
+        send.setName("SEND");
+        Thread reck = new PeerThreadReceiver(peer, clientSocket, recPkt); // Gera uma nova thread qd chega uma mensagem do servidor
+        reck.setName("RECK");
+        send.start();
+        reck.start();
+
+    }
+}
+
+    // Classe aninhada para comunicação com o Server e outros peers através de Threads
+    class PeerThreadSend extends Thread {
+
+        Peer peer; // Armazena as especificações do peer
+        DatagramSocket clientSocket; // Armazena os dados do datagrama do peer
+
+        public PeerThreadSend(Peer peer, DatagramSocket clientSocket) {
+            this.peer = peer;
+            this.clientSocket = clientSocket;
+        }
+
+        public void run() {
+            while (true) {
+                Mensagem.menu(peer, clientSocket); // exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
+                continue;
+            }
+        }
+    }
+
+// Classe aninhada para comunicação com o Server e outros peers através de Threads
+class PeerThreadReceiver extends Thread {
+
+    Peer peer; // Armazena as especificações do peer
+    DatagramSocket clientSocket; // Armazena os dados do datagrama do peer
+    DatagramPacket recPacket; // Armazena os dados do pacote que será enviado pelo peer
+
+    public PeerThreadReceiver(Peer peer, DatagramSocket clientSocket, DatagramPacket recPacket) {
+        this.peer = peer;
+        this.clientSocket = clientSocket;
+        this.recPacket = recPacket;
+    }
+
+    public void run() {
+        // A thread recebe mensagem ao servidor
+        try {
+            while(true) {
+                Mensagem.ACKfromServer(peer, clientSocket, recPacket); //aguarda retorno do servidor
+                continue;
+            }
+        } catch (SocketException socketException) { //caso o socket seja fechado
+            try {
+                clientSocket = new DatagramSocket();
+            } catch (SocketException e) {
+                throw new RuntimeException(e);
+            }
+            new PeerThreadReceiver(peer,clientSocket, recPacket); // Gera uma nova thread qd chega uma mensagem do servidorreck.setName("RECK");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
 
     }
 }
+
         /*
         Socket s = socketPeer();
 

@@ -5,9 +5,12 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.HashMap;
-
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class Servidor {
 
@@ -17,8 +20,8 @@ public class Servidor {
             InetAddress addr = InetAddress.getByName("127.0.0.1"); // Define o IP do servidor
             DatagramSocket serverSocket;
             serverSocket = new DatagramSocket(10098, addr); //porta padrão do servidor para comunicação com os peers
-            HashMap<String, Integer> ip_port_peers = new HashMap<>(); //Cria um HashMap vazio para registrar os Ips e portas dos peers, onde a chave é o IP.
-            HashMap<String, ArrayList<String>> files_peers = new HashMap<>(); // Cria um HashMap vazio para registrar os arquivos dos peers, a chave é o nome do arquivo, para cada arquivo há um array com uma lista de IPs que representam os peers que possuem
+            List<AbstractMap.SimpleEntry<String, String>> ip_port_peers = new CopyOnWriteArrayList<>();//Cria uma lista vazia para registrar os Ips e portas dos peers.
+            ConcurrentHashMap<String, ArrayList<String>> files_peers = new ConcurrentHashMap<>(); // Cria um ConcurrentHashMap vazio para registrar os arquivos dos peers, a chave é o nome do arquivo, para cada arquivo há um array com uma lista de IPs que representam os peers que possuem
 
             // O Servidor permanece funcionando
             while (true) {
@@ -26,7 +29,7 @@ public class Servidor {
                 byte[] recBuffer = new byte[1024];
                 DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length);
                 serverSocket.receive(recPkt); //BLOCKING - Recebe o datagrama
-                new ClientThread(serverSocket, recPkt, ip_port_peers, files_peers); // A cada datagrama recebido, uma thread é gerada para o atendimento
+                new ServerThread(serverSocket, recPkt, ip_port_peers, files_peers); // A cada datagrama recebido, uma thread é gerada para o atendimento
             }
 
         } catch (IOException e) {
@@ -38,14 +41,14 @@ public class Servidor {
 }
 
     // Classe aninhada para atendimendo dos peers através de Threads
-    class ClientThread extends Thread {
+    class ServerThread extends Thread {
 
-        DatagramSocket sock;
-        DatagramPacket recPkt;
-        HashMap<String, Integer> ip_port_peers;
-        HashMap<String, ArrayList<String>> files_peers;
+        DatagramSocket sock; // Armazena o socket do servidor
+        DatagramPacket recPkt; // Armazena o packet que será enviado ao cliente
+        List<AbstractMap.SimpleEntry<String, String>> ip_port_peers; // Armazena os ips e portas dos peers
+        ConcurrentHashMap<String, ArrayList<String>> files_peers; // Armazena os arquivos dos peers
 
-        public ClientThread(DatagramSocket sock,DatagramPacket recPkt,  HashMap<String, Integer> ip_port_peers, HashMap<String, ArrayList<String>> files_peers) {
+        public ServerThread(DatagramSocket sock,DatagramPacket recPkt,  List<AbstractMap.SimpleEntry<String, String>> ip_port_peers, ConcurrentHashMap<String, ArrayList<String>> files_peers) {
             this.sock = sock;
             this.recPkt = recPkt;
             this.ip_port_peers = ip_port_peers;
