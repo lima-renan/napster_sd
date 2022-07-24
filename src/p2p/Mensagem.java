@@ -15,8 +15,9 @@ public class Mensagem {
     private int idRet; //id de retorno da mensagem, se diferente do id, a mensagem não é o ack esperado
     private String option; //Operação
     private String comment; //utilizado para SEARCH, UPDATE ou DOWNLOAD
-    private AbstractMap.SimpleEntry<String, String>ipPortPeer;
-    private ArrayList<String> filesPeer;
+    private AbstractMap.SimpleEntry<String, String>ipPortPeer; // aramzena o ip e a porta do peer
+    private ArrayList<String> filesPeer; // armazena o nome dos arquivos do peer
+    public static volatile ConcurrentHashMap <Integer, Boolean>msgStatus = new ConcurrentHashMap<>(); // registra se as mensagens enviadas já receberam o retorno
     public static volatile boolean ack;
 
 
@@ -47,6 +48,7 @@ public class Mensagem {
     public ArrayList<String> getFilesPeer() {
         return this.filesPeer;
     }
+    public static boolean getStatusIdSend(Integer key){ return msgStatus.get(key); }
 
     public void setIdRet(Integer id){ this.idRet =id; }
     public void setOption(String option) {
@@ -61,6 +63,9 @@ public class Mensagem {
 
     public void setFilesPeer (ArrayList<String>files) { this.filesPeer = files; }
 
+    public static void setMsgStatus(Integer id, Boolean ack){ msgStatus.put(id,ack); }
+
+    public void setMsgAck(Integer id, Boolean ack){ this.msgStatus.computeIfPresent(id,(k,v)->ack);}
 
     // Welcome - exibe mensagem assim que o peer é inicializado
     public static void welcome() {
@@ -145,20 +150,21 @@ public class Mensagem {
         msgServer.setIdRet(msgServer.id);
         msgServer.ack = false;
         String sendJson = Mensagem.preparaJson(msgServer); //Cria JSON com os dados do peer
-        Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
+        enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
+        setMsgStatus(msgServer.id,false); // coloca a mensegem enviada e o status na hashmap para confimarção
         long timer = System.currentTimeMillis();
         if(opt.equals("LEAVE")){
-            while(Peer.running && (System.currentTimeMillis() - timer < 5000)){ //aguarda o peer ser desligado ou timeout no envio da mensagem
+            while(Peer.running && (System.currentTimeMillis() - timer < 10000)){ //aguarda o peer ser desligado ou timeout (10s) no envio da mensagem
                 continue;
             }
         }else {
-            while (!Mensagem.ack && (System.currentTimeMillis() - timer < 5000)) { // esperar enquanto não receber o ack ou o contador não enviar o alerta
+            while (!Mensagem.ack && (System.currentTimeMillis() - timer < 10000)) { // esperar enquanto não receber o ack ou o contador(10s) não enviar o alerta
                 continue;
             }
         }
         if (!Mensagem.ack) { // se não recebeu o ack reenvia a mensagem
             Mensagem.enviaPacket(sendJson, clientSocket, serverAddr, serverPort); //envia o datagrama para o servidor
-            while (!Mensagem.ack && (System.currentTimeMillis() - timer < 5000)) { // esperar enquanto não receber o ack ou o contador não enviar o alerta
+            while (!Mensagem.ack && (System.currentTimeMillis() - timer < 10000)) { // esperar enquanto não receber o ack ou o contador(10s) não enviar o alerta
                 continue;
             }
         }
@@ -282,7 +288,7 @@ public class Mensagem {
                 } else {
                     ip_port_peers.add(msg.getIpPortPeer()); // Adiciona o IP e a porta do peer na lista do HashMap
                     for(String file : msg.filesPeer) {  // verifica todos os arquivos
-                        if(files_peers.get(file) == null){ // se não houver o arquivo no HashMap, uma nova entrada é adicionada
+                        if(!files_peers.containsKey(file)){ // se não houver o arquivo no HashMap, uma nova entrada é adicionada
                             files_peers.put(file, new ArrayList<>(Arrays.asList(msg.getIpPeer() + ":" + msg.getPortPeer()))); //concatena o Ip com a porta do peer e adiciono na Hashmap
                         }else {
                             files_peers.get(file).add(msg.getIpPeer() + ":" + msg.getPortPeer()); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
@@ -330,10 +336,11 @@ public class Mensagem {
         Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do servidor
         String informacao = new String(recPkt.getData(), recPkt.getOffset(), recPkt.getLength()); //Datagrama do servidor é convertido em String json
         Mensagem msg = recgson.fromJson(informacao, Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
-        if(Mensagem.id == msg.getIdRet()){ // se a mensagem tiver o mesmo ack, a mensagem enviada é confirmada
-            Mensagem.ack = true;
+        if(id == msg.getIdRet()){ // se a mensagem tiver o mesmo ack, a mensagem enviada é confirmada
+            ack = true;
         }
-        if(msg.getOption() != "ALIVE" && Mensagem.ack) {
+        if(msg.getOption() != "ALIVE" && ack && !getStatusIdSend(msg.getIdRet())) { // verifica se não é alive, ou se está fora de ordem ou já foi confirmada
+            setMsgStatus(id,true); //confirma o ack
             switch (msg.getOption()) {
                 case "JOIN_OK": // quando receber o retorno do JOIN do servidor
                     System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString()); // imprime as informações do Peer
