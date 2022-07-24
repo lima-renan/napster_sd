@@ -20,7 +20,7 @@ public class Servidor {
             InetAddress addr = InetAddress.getByName("127.0.0.1"); // Define o IP do servidor
             DatagramSocket serverSocket;
             serverSocket = new DatagramSocket(10098, addr); //porta padrão do servidor para comunicação com os peers
-            List<AbstractMap.SimpleEntry<String, String>> ip_port_peers = new CopyOnWriteArrayList<>();//Cria uma lista vazia para registrar os Ips e portas dos peers.
+            List<AbstractMap.SimpleEntry<String, String>> ip_port_peers = new CopyOnWriteArrayList<>(); //Cria uma lista vazia para registrar os Ips e portas dos peers.
             ConcurrentHashMap<String, ArrayList<String>> files_peers = new ConcurrentHashMap<>(); // Cria um ConcurrentHashMap vazio para registrar os arquivos dos peers, a chave é o nome do arquivo, para cada arquivo há um array com uma lista de IPs que representam os peers que possuem
 
             // O Servidor permanece funcionando

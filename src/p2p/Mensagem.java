@@ -12,6 +12,7 @@ import com.google.gson.Gson;
 // Cabeçalho que será usado para as mensagens
 public class Mensagem {
     public static volatile int id; //id da mensagem que será enviada
+    private int idRet; //id de retorno da mensagem, se diferente do id, a mensagem não é o ack esperado
     private String option; //Operação
     private String comment; //utilizado para SEARCH, UPDATE ou DOWNLOAD
     private AbstractMap.SimpleEntry<String, String>ipPortPeer;
@@ -25,6 +26,10 @@ public class Mensagem {
     }
 
     // Métodos setters e getters
+
+    public Integer getIdRet() {
+        return this.idRet;
+    }
     public String getOption() {
         return this.option;
     }
@@ -43,7 +48,7 @@ public class Mensagem {
         return this.filesPeer;
     }
 
-
+    public void setIdRet(Integer id){ this.idRet =id; }
     public void setOption(String option) {
         this.option = option;
     }
@@ -137,16 +142,29 @@ public class Mensagem {
                 break;
         }
         msgServer.id = new Random().nextInt(10000) + 1; // número rândomico entre 1 e 10000
-        Mensagem.id = msgServer.id;
+        msgServer.setIdRet(msgServer.id);
         msgServer.ack = false;
-        Mensagem.ack = msgServer.ack;
         String sendJson = Mensagem.preparaJson(msgServer); //Cria JSON com os dados do peer
         Mensagem.enviaPacket(sendJson,clientSocket,serverAddr,serverPort); //envia o datagrama para o servidor
-        while(!Mensagem.ack){
-
+        long timer = System.currentTimeMillis();
+        if(opt.equals("LEAVE")){
+            while(Peer.running && (System.currentTimeMillis() - timer < 5000)){ //aguarda o peer ser desligado ou timeout no envio da mensagem
+                continue;
+            }
+        }else {
+            while (!Mensagem.ack && (System.currentTimeMillis() - timer < 5000)) { // esperar enquanto não receber o ack ou o contador não enviar o alerta
+                continue;
+            }
         }
-        //clientSocket.setSoTimeout(7000); // temporizador aguarda até 7s após o envio para o servidor, caso não haja retorno, uma nova tentativa é feita
-
+        if (!Mensagem.ack) { // se não recebeu o ack reenvia a mensagem
+            Mensagem.enviaPacket(sendJson, clientSocket, serverAddr, serverPort); //envia o datagrama para o servidor
+            while (!Mensagem.ack && (System.currentTimeMillis() - timer < 5000)) { // esperar enquanto não receber o ack ou o contador não enviar o alerta
+                continue;
+            }
+        }
+        if (!Mensagem.ack) { // Se ainda não receber, exibir mensagem de erro
+            System.err.println("Problema de conexão com o servidor!"); // exibe aviso de que o peer não está conectado
+        }
 }
 
 
@@ -260,7 +278,6 @@ public class Mensagem {
             case "JOIN":
                 if (ip_port_peers.contains(msg.getIpPortPeer())) { // se já houver algum peer com o mesmo IP, o JOIN é negado
                     msg.setOption("JOIN_DONE");
-                    msg.ack = true;
                     setACK(preparaJson(msg), recPkt, serverSocket); // envia o ACK para o cliente
                 } else {
                     ip_port_peers.add(msg.getIpPortPeer()); // Adiciona o IP e a porta do peer na lista do HashMap
@@ -272,7 +289,6 @@ public class Mensagem {
                         }
                     }
                     msg.setOption("JOIN_OK");
-                    msg.ack = true;
                     setACK(preparaJson(msg), recPkt, serverSocket); // envia string ACK para o cliente
                     System.out.println("Peer " + (msg.getIpPeer()) + ":" + msg.getPortPeer() + " adicionado com arquivos " + (msg.getFilesPeer()).toString()); // imprime no prompt do servidor
                     System.out.println(Arrays.asList(ip_port_peers));
@@ -282,7 +298,6 @@ public class Mensagem {
             case "SEARCH":
                 System.out.println("Peer " + (msg.getIpPeer()) + ":" + msg.getPortPeer() + " solicitou arquivo " + msg.getComment()); // imprime no prompt do servidor o arquivo solicitado pelo peer
                 msg.setComment(String.valueOf(files_peers.get(msg.getComment())));
-                msg.ack = true;
                 setACK(preparaJson(msg), recPkt, serverSocket); // envia string ACK para o cliente com lista de IPs e Portas de peers que ppossuem o arquivo
                 break;
             case "LEAVE":
@@ -292,7 +307,6 @@ public class Mensagem {
                     files_peers.get(iter.next()).remove(msg.getIpPeer() + ":" + msg.getPortPeer()); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
                 }
                 msg.setOption("LEAVE_OK");
-                msg.ack = true;
                 setACK(preparaJson(msg), recPkt, serverSocket); // envia string ACK para o cliente
                 break;
             case "UPDATE": // no comment da Mensagem recebida do peer há o nome do arquivo baixado, com essa informação e com o IP  e Porta do Peer é possível atualizar o hashmap
@@ -302,7 +316,6 @@ public class Mensagem {
                     files_peers.get(msg.getComment()).add((msg.getIpPeer() + ":" + msg.getPortPeer())); //caso algum peer já possua o arquivo, apenas mais um IP é acrescentado no Array indicando o outro peer que também possui
                 }
                 msg.setOption("UPDATE_OK");
-                msg.ack = true;
                 setACK(preparaJson(msg), recPkt, serverSocket); // envia string ACK para o cliente com lista de IPs e Portas de peers que ppossuem o arquivo
                 break;
             case "ALIVE_OK":
@@ -317,30 +330,32 @@ public class Mensagem {
         Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do servidor
         String informacao = new String(recPkt.getData(), recPkt.getOffset(), recPkt.getLength()); //Datagrama do servidor é convertido em String json
         Mensagem msg = recgson.fromJson(informacao, Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
-        if(msg.id == Mensagem.id){ // se a mensagem tiver o mesmo ack, a mensagem enviada é confirmada
+        if(Mensagem.id == msg.getIdRet()){ // se a mensagem tiver o mesmo ack, a mensagem enviada é confirmada
             Mensagem.ack = true;
         }
-        switch (msg.getOption()) {
-            case "JOIN_OK": // quando receber o retorno do JOIN do servidor
-                System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString()); // imprime as informações do Peer
-                break;
-            case "JOIN_DONE": // quando o peer já fez o join anteriormente
-                System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString()); // imprime as informações do Peer
-                break;
-            case "SEARCH": // o caso default foi definido como retorno do SEARCH do servidor
-                System.out.println("peers com arquivo solicitado " + msg.getComment()); // imprime as informações dos Peers que possuem o arquivo solicitado
-                break;
-            case "LEAVE_OK": // quando receber o retorno do LEAVE do servidor
-                clientSocket.close(); // quando receber a confirmação fecha o socket com o servidor
-                break;
-            case "UPDATE_OK": // quando receber o servidor retornar a requisição de UPDATE
-                break; // Apenas não faz nova tentativa de envio
-            case "ALIVE": // quando receber o servidor solicitar um ALIVE
-                Mensagem msgAlive = new Mensagem(); // cria nova mensagem para confirmar a conexão
-                msgAlive.setIpPortPeer(peer.getIp(), peer.getPort());
-                msgAlive.setOption("ALIVE_OK");
-                break;
-
+        if(msg.getOption() != "ALIVE" && Mensagem.ack) {
+            switch (msg.getOption()) {
+                case "JOIN_OK": // quando receber o retorno do JOIN do servidor
+                    System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString()); // imprime as informações do Peer
+                    break;
+                case "JOIN_DONE": // quando o peer já fez o join anteriormente
+                    System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString()); // imprime as informações do Peer
+                    break;
+                case "SEARCH": // o caso default foi definido como retorno do SEARCH do servidor
+                    System.out.println("peers com arquivo solicitado " + msg.getComment()); // imprime as informações dos Peers que possuem o arquivo solicitado
+                    break;
+                case "LEAVE_OK": // quando receber o retorno do LEAVE do servidor
+                    clientSocket.close(); // quando receber a confirmação fecha o socket com o servidor
+                    Peer.running = false; //desliga o peer
+                    break;
+                case "UPDATE_OK": // quando receber o servidor retornar a requisição de UPDATE
+                    break; // Apenas não faz nova tentativa de envio
+                case "ALIVE": // quando receber o servidor solicitar um ALIVE
+                    Mensagem msgAlive = new Mensagem(); // cria nova mensagem para confirmar a conexão
+                    msgAlive.setIpPortPeer(peer.getIp(), peer.getPort());
+                    msgAlive.setOption("ALIVE_OK");
+                    break;
+            }
         }
 
     }

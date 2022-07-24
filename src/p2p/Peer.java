@@ -3,8 +3,6 @@ package p2p;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 
 
@@ -19,6 +17,7 @@ public class Peer {
     private String port;
     private ArrayList<String> files;
     private String folder; //Endereço da apsta com os arquivos
+    public static volatile boolean running; //determina se o peer está em execução
 
 
     // Métodos setters e getters
@@ -64,6 +63,7 @@ public class Peer {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        running = true; //inicia o peer
         Peer peer = new Peer(); // Cria estrutura para receber especificações do peer
         DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
         byte[] recBuffer = new byte[1024]; // buffer de recebimento
@@ -73,8 +73,11 @@ public class Peer {
         send.setName("SEND");
         Thread reck = new PeerThreadReceiver(peer, clientSocket, recPkt); // Gera uma nova thread qd chega uma mensagem do servidor
         reck.setName("RECK");
-        send.start();
         reck.start();
+        send.start();
+        reck.join();
+        send.join();
+
 
     }
 }
@@ -91,7 +94,7 @@ public class Peer {
         }
 
         public void run() {
-            while (true) {
+            while (Peer.running) {
                 Mensagem.menu(peer, clientSocket); // exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
                 continue;
             }
@@ -114,17 +117,10 @@ class PeerThreadReceiver extends Thread {
     public void run() {
         // A thread recebe mensagem ao servidor
         try {
-            while(true) {
+            while(Peer.running) {
                 Mensagem.ACKfromServer(peer, clientSocket, recPacket); //aguarda retorno do servidor
                 continue;
             }
-        } catch (SocketException socketException) { //caso o socket seja fechado
-            try {
-                clientSocket = new DatagramSocket();
-            } catch (SocketException e) {
-                throw new RuntimeException(e);
-            }
-            new PeerThreadReceiver(peer,clientSocket, recPacket); // Gera uma nova thread qd chega uma mensagem do servidorreck.setName("RECK");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
