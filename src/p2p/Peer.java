@@ -3,6 +3,7 @@ package p2p;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.util.ArrayList;
 
 
@@ -16,7 +17,7 @@ public class Peer {
     private String ip;
     private String port;
     private ArrayList<String> files;
-    private String folder; //Endereço da apsta com os arquivos
+    private String folder; //Endereço da pasta com os arquivos
     public static volatile boolean running; //determina se o peer está em execução
 
 
@@ -64,19 +65,22 @@ public class Peer {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         running = true; //inicia o peer
-        Peer peer = new Peer(); // Cria estrutura para receber especificações do peer
-        DatagramSocket clientSocket = new DatagramSocket(); // Datagrama para conexão UDP com o Servidor
+        Peer peer = new Peer(); // Cria estrutura para receber especificações do peer e
+        Mensagem.welcome(); // exibe mensagem de inicialização
+        Mensagem.PeerConfig(peer); //
+        DatagramSocket clientSocket = new DatagramSocket(Integer.parseInt(peer.getPort()),InetAddress.getByName(peer.getIp())); // Datagrama para conexão UDP com o Servidor
+        System.out.println("teste");
         byte[] recBuffer = new byte[1024]; // buffer de recebimento
         DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length); // cria pacote de recebimento
-        Mensagem.welcome(); // exibe mensagem de inicialização
-        Thread send = new PeerThreadSend(peer, clientSocket); // exibe o menu e envia através de threads
-        send.setName("SEND");
         Thread reck = new PeerThreadReceiver(peer, clientSocket, recPkt); // Gera uma nova thread qd chega uma mensagem do servidor
         reck.setName("RECK");
         reck.start();
-        send.start();
-        reck.join();
+        Thread send = new PeerThreadSend(peer, clientSocket, "START"); // estabelelce a primeira conexão com o server
         send.join();
+        while (Peer.running) {
+            Mensagem.menu(peer, clientSocket); // exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
+            continue;
+        }
 
 
     }
@@ -87,16 +91,21 @@ public class Peer {
 
         Peer peer; // Armazena as especificações do peer
         DatagramSocket clientSocket; // Armazena os dados do datagrama do peer
+        String option; //opção de envio
 
-        public PeerThreadSend(Peer peer, DatagramSocket clientSocket) {
+        public PeerThreadSend(Peer peer, DatagramSocket clientSocket, String option) {
+            // define as configurações da thread e inicia
             this.peer = peer;
             this.clientSocket = clientSocket;
+            this.option = option;
+            this.start();
         }
 
         public void run() {
-            while (Peer.running) {
-                Mensagem.menu(peer, clientSocket); // exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
-                continue;
+            try {
+                Mensagem.tryConect(peer, clientSocket, option);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
     }
@@ -122,6 +131,8 @@ class PeerThreadReceiver extends Thread {
                 continue;
             }
         } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
 
