@@ -87,18 +87,18 @@ class ServerThreadSendAlive extends Thread {
 
     public void run() {
         // As threads prestam atendimento aos peers, em caso de erro é exibida uma exceção
-            while(true) {
+            boolean run = true;
+            while(run) {
                 try {
                     Thread.sleep(30000); // Aguarda por 30s
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
                 try {
-                    Mensagem.sendAlive(sock, recPkt, ip_port_peers, files_peers);
+                    run = Mensagem.sendAlive(sock, recPkt, ip_port_peers, files_peers);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                continue;
             }
 
 

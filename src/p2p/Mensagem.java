@@ -128,7 +128,7 @@ public class Mensagem {
         int serverPort = 10098; // porta do Servidor para conectar com os peers
         Mensagem msgServer = new Mensagem();
         switch (opt) { // Prepara a mensagem para enviar ao servidor
-            case "START": //Coloca os dados necessários para o JOIN
+            case "START": //Coloca os dados necessários para o JOIN inicial
                 msgServer.setIpPortPeer(peer.getIp(),peer.getPort());
                 msgServer.setOption("JOIN");
                 msgServer.setFilesPeer(peer.getFiles());
@@ -315,8 +315,7 @@ public class Mensagem {
                     setACK(preparaJson(msg), recPkt, serverSocket); // envia string ACK para o cliente
                     new ServerThreadSendAlive(serverSocket, recPkt, ip_port_peers, files_peers); // ativa o ALIVE
                     System.out.println("Peer " + (msg.getIpPeer()) + ":" + msg.getPortPeer() + " adicionado com arquivos " + (msg.getFilesPeer()).toString()); // imprime no prompt do servidor
-                    System.out.println(Arrays.asList(ip_port_peers));
-                    System.out.println(Arrays.asList(files_peers));
+
                 }
                 break;
             case "SEARCH":
@@ -353,40 +352,35 @@ public class Mensagem {
 
     }
 
-    public static void sendAlive(DatagramSocket sock,DatagramPacket recPkt, ConcurrentHashMap<AbstractMap.SimpleEntry<String, String>,Boolean> ip_port_peers, ConcurrentHashMap<String, ArrayList<String>> files_peers) throws IOException {
+    public static boolean sendAlive(DatagramSocket sock,DatagramPacket recPkt, ConcurrentHashMap<AbstractMap.SimpleEntry<String, String>,Boolean> ip_port_peers, ConcurrentHashMap<String, ArrayList<String>> files_peers) throws IOException {
         Mensagem alive = new Mensagem();
         AbstractMap.SimpleEntry<String,String>ipPort = new AbstractMap.SimpleEntry<>(recPkt.getAddress().getHostAddress(),String.valueOf(recPkt.getPort())); // IP e Porta do peer
         alive.setOption("ALIVE");
-        setACK(preparaJson(alive), recPkt, sock);
+        setACK(preparaJson(alive), recPkt, sock); //envia o alive para o peer
         ip_port_peers.put(ipPort,false); //define o alive temporariamente como false
         long timer = System.currentTimeMillis();
-        while(!ip_port_peers.get(ipPort)&&(System.currentTimeMillis() - timer < 10000)){
-            continue;
+        while(!ip_port_peers.get(ipPort)&&(System.currentTimeMillis() - timer < 10000)){ // aguarda o retorno em até 10 s
         }
         if(!ip_port_peers.get(ipPort)){ // Se não houver retorno, excluir os dados do Peer do Servidor
             ArrayList<String>files = new ArrayList<>();
-            boolean remov = false;
             ip_port_peers.remove(ipPort);
-            for(Iterator<Map.Entry<String, ArrayList<String>>> it = files_peers.entrySet().iterator(); it.hasNext(); ) {
-                Map.Entry<String, ArrayList<String>> entry = it.next();
-                for(String ip : entry.getValue()){
-                    if(ip.equals(ipPort.getKey()+":"+ipPort.getValue())){
-                        entry.getValue().remove(ip);
-                        remov = true;
-                    }
-                }
-                if(remov){
-                    remov = false;
-                    files.add(entry.getKey());
-                }
+            for(String file : Collections.list(files_peers.keys())){ //verifica quais arquivos o peer possuia
+               if(files_peers.get(file).contains(ipPort.getKey()+":"+ipPort.getValue())){
+                   files.add(file);
+               }
             }
-            /*ArrayList <String> files = files_peers.get(ipPort);
-            files_peers.forEach((string, list) -> {
+            Collections.sort(files); // ordena os nomes dos arquivos
+            files_peers.forEach((key, list) -> { //apaga o ip e porta do peer
                 // remove o IP do hashmap de arquivos
                 list.removeIf(uuid -> uuid.equals(ipPort.getKey()+":"+ipPort.getValue()));
-            });*/
-            System.out.println("Peer " + ipPort.getKey() + ":" + ipPort.getValue() + " morto. Eliminando seus arquivos " + files.toString());
+            });
+            files_peers.entrySet()
+                    .removeIf(e -> Objects.isNull(e.getValue()) ||
+                            (e.getValue() instanceof Collection && ((Collection) e.getValue()).isEmpty())); // remove se hover algum arquivo sem peer
+            System.out.println("Peer " + ipPort.getKey() + ":" + ipPort.getValue() + " morto. Eliminando seus arquivos " + files); // imprime na console do servidor
+            return false; // Para o alive para o peer
         }
+        return true; //continua o alive
     }
 
     //Recebe o ACK do Servidor e retorna a Mensagem com detalhes da conexão
@@ -667,4 +661,8 @@ public class Mensagem {
     }
 
 }
+
+System.out.println(Arrays.asList(ip_port_peers));
+                    System.out.println(Arrays.asList(files_peers));
+
 */

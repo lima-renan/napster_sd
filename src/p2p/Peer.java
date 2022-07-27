@@ -69,7 +69,6 @@ public class Peer {
         Mensagem.welcome(); // exibe mensagem de inicialização
         Mensagem.PeerConfig(peer); //
         DatagramSocket clientSocket = new DatagramSocket(Integer.parseInt(peer.getPort()),InetAddress.getByName(peer.getIp())); // Datagrama para conexão UDP com o Servidor
-        System.out.println("teste");
         byte[] recBuffer = new byte[1024]; // buffer de recebimento
         DatagramPacket recPkt = new DatagramPacket(recBuffer, recBuffer.length); // cria pacote de recebimento
         Thread reck = new PeerThreadReceiver(peer, clientSocket, recPkt); // Gera uma nova thread qd chega uma mensagem do servidor
@@ -78,7 +77,7 @@ public class Peer {
         Thread send = new PeerThreadSend(peer, clientSocket, "START"); // estabelelce a primeira conexão com o server
         send.join();
         while (Peer.running) {
-            Mensagem.menu(peer, clientSocket); // exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
+            Mensagem.menu(peer, clientSocket); //exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
             continue;
         }
 
