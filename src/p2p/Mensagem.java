@@ -73,7 +73,7 @@ public class Mensagem {
     }
 
     // Menu com as opções de JOIN, LEAVE e SEARCH - retorna dados do datagrama da conexão com o servidor
-    public static void menu(Peer peer, DatagramSocket clientSocket) {
+    public static void menu(Peer peer,DatagramSocket clientSocket) {
             Scanner keyboard = new Scanner(System.in);
             System.out.println("\nMenu: " + "\n" +
                     "   " + "1 - JOIN" + "\n" +
@@ -104,6 +104,14 @@ public class Mensagem {
                         if (!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de SEARCH é enviada
                             PeerThreadSend send = new PeerThreadSend(peer, clientSocket, "SEARCH");
                             send.join();
+                        } else {
+                            System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
+                        }
+                        break;
+                    case 3: //DOWNLOAD
+                        if (!clientSocket.isClosed()) { // Se o SOCKET estiver aberto, uma solicitação de DOWNLOAD é enviada
+                            initDownload(peer); // inicia o processo de download
+                            break;
                         } else {
                             System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
                         }
@@ -143,12 +151,6 @@ public class Mensagem {
 
             case "SEARCH": //Coloca os dados necessários para o SEARCH
                 prepSearch(msgServer);
-                msgServer.setIpPortPeer(peer.getIp(),peer.getPort());
-                msgServer.setOption(opt);
-                break;
-
-            case "DOWNLOAD": //Coloca os dados necessários para o SEARCH
-                initDownload(msgServer);
                 msgServer.setIpPortPeer(peer.getIp(),peer.getPort());
                 msgServer.setOption(opt);
                 break;
@@ -247,16 +249,51 @@ public class Mensagem {
 
     public static void prepSearch (Mensagem msgServer){
         Scanner keyboard = new Scanner(System.in);
-        System.out.print("Digite o nome do arquivo desejado com a extensão (e.g., aula.mp4): ");
+        System.out.print("\nDigite o nome do arquivo desejado com a extensão (e.g., aula.mp4): ");
         String name = keyboard.next(); //váriavel com o nome do arquivo que será buscado
         msgServer.setComment(name); // atualiza a mensagem com o nome do arquivo
     }
 
-    public static void initDownload (Mensagem msgServer){
+// Inicia o processo de download
+    public static void initDownload (Peer peer){
         Scanner keyboard = new Scanner(System.in);
-        System.out.println("Digite o IPv4 e a porta do peer (e.g., 0.0.0.0:0000) que contém o arquivo para DOWNLOAD: ");
+        System.out.print("\nDigite o nome do arquivo para download com a extensão (e.g., aula.mp4): ");
+        String fileDown = keyboard.next();
+        System.out.println("\nDigite o IPv4 e a porta do peer (e.g., 0.0.0.0:0000) que contém o arquivo para DOWNLOAD: ");
         String ip = keyboard.next(); //váriavel que captura o IPv4 do peer
-        msgServer.setComment(ip); // atualiza a mensagem com os dados do peer que contém o arquivo
+        try { //verifica se o formato do IP foi digitado corretamente
+            String[] ipPort = ip.toLowerCase().split(":"); //separa IP e porta em duas strings
+            if (ipPort.length != 2) {
+                System.err.println("Formato IP:Porta incorreto (não é do tipo 0.0.0.0:1024, localhost:1024)"); // exibe mensagem de erro sobre formato incorreto do IP e Porta digitados
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
+            if (Integer.parseInt(ipPort[1]) < 1024 || Integer.parseInt(ipPort[1]) > 65535) {
+                System.err.println("Intervalo da porta digitada é inválido (não está entre 1024 e 65535)"); // exibe mensagem de erro sobre intervalo da porta digitada
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
+            if (ipPort[0].equals("localhost")) {
+                ipPort[0] = "127.0.0.1"; //define o localhost como 127.0.0.1
+            }
+            String[] ipName = ipPort[0].split("[\\.]");
+            if (ipName.length != 4) {
+                System.err.println("Formato do IP digitado é inválido (não é do tipo 0.0.0.0 ou localhost)"); // exibe erro se o IP não foi digitado corretamente - tamanho incorreto
+                throw new Exception("Exception thrown"); // lança uma exceção
+            } else if (!ipPort[0].equals("localhost")
+                    && ((Integer.parseInt(ipName[0]) < 0 || Integer.parseInt(ipName[0]) > 255)
+                    || (Integer.parseInt(ipName[1]) < 0 || Integer.parseInt(ipName[1]) > 255)
+                    || (Integer.parseInt(ipName[2]) < 0 || Integer.parseInt(ipName[2]) > 255)
+                    || (Integer.parseInt(ipName[3]) < 0 || Integer.parseInt(ipName[3]) > 255))) {
+                System.err.println("Intervalo do IP digitado é inválido (não está entre 0.0.0.0 e 255.255.255.255 ou é localhost"); // exibe erro se o IP não foi digitado corretamente - fora do intervalo válido
+                throw new Exception("Exception thrown"); // lança uma exceção
+            }
+            PeerThreadSendStringTCP sendTCP = new PeerThreadSendStringTCP(peer,ipPort[0],Integer.parseInt(ipPort[1]),fileDown);
+            sendTCP.start();
+            sendTCP.join();
+        }catch (Exception e) {
+            // se ocorrer erros durante o processamento dos dados fornecidos
+            System.err.println("Nova tentativa de conexão!"); //mensagem de warning sobre nova tentativa de conexão
+            initDownload(peer);
+        }
     }
 
     // Cria objeto que recebe o cabeçalho da mensagem que será enviada e retorna uma string json
