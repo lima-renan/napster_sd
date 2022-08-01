@@ -85,10 +85,6 @@ public class Peer {
         Thread tcpCnt = new PeerThreadDownload(peerTCP, clientSocket, peer); //Thread para recebimento de solicitações de downloads de outros peers via TCP
         tcpCnt.setName("tcpConnect");
         tcpCnt.start();
-        long timer = System.currentTimeMillis();
-        while(System.currentTimeMillis() - timer < 1000){
-            //aguardar estabelecer a conexão
-        }
         while (peer.getRunning()) {
             Mensagem.menu(peer,clientSocket); //exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
         }
@@ -120,6 +116,8 @@ public class Peer {
             try {
                 Mensagem.tryConect(peer, clientSocket, option);
             } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
@@ -215,14 +213,14 @@ class PeerThreadDownload extends Thread {
                     Mensagem msg = recgson.fromJson(dataString.toString(), Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
                     if (msg.getComment().equals("DOWNLOAD_NEGADO")) {
                         ArrayList<String> ipsSearch = peer.getPeersSearch();
-                        if(ipsSearch.size() > 1){
+                        if(!ipsSearch.isEmpty() && ipsSearch.size() > 1){
                             List<String> filteredList = ipsSearch.stream()
                                     .filter(ip -> !ip.equals(msg.getIpPeer()+":"+msg.getPortPeer()))
                                     .collect(Collectors.toList());
 
                             String[] ans = filteredList.get(0).split(":");
                             System.out.println("peer "+ msg.getIpPeer() + ":" + msg.getPortPeer() + " negou o download, pedindo agora para o peer " + ans[0] + ":" + ans[1]);
-                            PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer,ans[0], Integer.parseInt(ans[1]), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
+                            PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer, ans[0], Integer.parseInt(ans[1]), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
                             sendString.start(); // inicia a thread
                             sendString.join(); // aguarda a conclusão
                         }else{ // caso só um peer tenha o arquivo
@@ -230,9 +228,10 @@ class PeerThreadDownload extends Thread {
                             long timer = System.currentTimeMillis();
                             while((System.currentTimeMillis() - timer < 5000)){ // aguarda 5s para enviar uma nova solicitação
                             }
-                            PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer,msg.getIpPeer(), Integer.parseInt(msg.getPortPeer()), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
+                            PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer, msg.getIpPeer(), Integer.parseInt(msg.getPortPeer()), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
                             sendString.start(); // inicia a thread
                             sendString.join(); // aguarda a conclusão
+
                         }
 
                     } else { //verifica se o arquivo solicitado existe
@@ -297,6 +296,8 @@ class PeerThreadSendStringTCP extends Thread {
         }
         catch(Exception e){
             e.printStackTrace();
+            System.err.println("Peer solicitado não pode ser conectado, tente novamente!");
+            System.exit(1);
         }
     }
 
@@ -349,6 +350,8 @@ class PeerThreadSendFileTCP extends Thread {
         }
         catch(Exception e){
             e.printStackTrace();
+            System.err.println("Peer solicitado não pode ser conectado, tente novamente!");
+            System.exit(1);
         }
 
 }

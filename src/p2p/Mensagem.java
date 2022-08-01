@@ -34,42 +34,25 @@ public class Mensagem {
     public String getOption() {
         return this.option;
     }
-
     public String getComment() {
         return this.comment;
     }
-
     public String getIpPeer(){ return this.ipPortPeer.getKey();}
-
     public String getPortPeer(){ return this.ipPortPeer.getValue();}
-
     public AbstractMap.SimpleEntry<String, String> getIpPortPeer(){ return this.ipPortPeer;}
-
     public ArrayList<String> getFilesPeer() {
         return this.filesPeer;
     }
-    public static boolean getStatusIdSend(Integer key){ return msgStatus.get(key); }
-
-
-
     public void setIdRet(Integer id){ this.idRet =id; }
     public void setOption(String option) {
         this.option = option;
     }
-
     public void setComment(String comment) {
         this.comment = comment;
     }
-
     public void setIpPortPeer(String ip, String port) { this.ipPortPeer =  new AbstractMap.SimpleEntry<>(ip,port); }
-
     public void setFilesPeer (ArrayList<String>files) { this.filesPeer = files; }
-
     public static void setMsgStatus(Integer id, Boolean ack){ msgStatus.put(id,ack); }
-
-    public void setMsgAck(Integer id, Boolean ack){ this.msgStatus.computeIfPresent(id,(k,v)->ack);}
-
-
 
     // Welcome - exibe mensagem assim que o peer é inicializado
     public static void welcome() {
@@ -120,7 +103,7 @@ public class Mensagem {
                             while(!run){// aguarda o retorno do outro peer
                                 run = peer.getAnswer();
                             }
-                            sleep(5000); // espera o retorno do Download
+                            sleep(10000); // espera o retorno do Download
                             break;
                         } else {
                             System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado
@@ -141,7 +124,7 @@ public class Mensagem {
     }
 
     // Tenta um retorno do Servidor para o JOIN, LEAVE ou SEARCH - Recebe o DatagramSocket e a opção de comunicação desejada
-    public static void tryConect (Peer peer, DatagramSocket clientSocket, String opt) throws IOException {
+    public static void tryConect (Peer peer, DatagramSocket clientSocket, String opt) throws IOException, InterruptedException {
         InetAddress serverAddr = InetAddress.getByName("127.0.0.1"); // IP padrão do Servidor
         int serverPort = 10098; // porta do Servidor para conectar com os peers
         Mensagem msgServer = new Mensagem();
@@ -194,18 +177,17 @@ public class Mensagem {
             }
         }else {
             while (!Mensagem.ack && (System.currentTimeMillis() - timer < 10000)) { // esperar enquanto não receber o ack ou o contador(10s) não enviar o alerta
-                continue;
             }
         }
         if (!Mensagem.ack) { // se não recebeu o ack reenvia a mensagem
             Mensagem.enviaPacket(sendJson, clientSocket, serverAddr, serverPort); //envia o datagrama para o servidor
             while (!Mensagem.ack && (System.currentTimeMillis() - timer < 10000)) { // esperar enquanto não receber o ack ou o contador(10s) não enviar o alerta
-                continue;
             }
         }
         if (!Mensagem.ack) { // Se ainda não receber, exibir mensagem de erro
             System.err.println("Problema de conexão com o servidor!"); // exibe aviso de que o peer não está conectado
         }
+        sleep(500); //aguarda a mensagem de resposta ser impressa
 }
 
 
@@ -454,22 +436,22 @@ public class Mensagem {
         Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do servidor
         String informacao = new String(recPkt.getData(), recPkt.getOffset(), recPkt.getLength()); //Datagrama do servidor é convertido em String json
         Mensagem msg = recgson.fromJson(informacao, Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
+        boolean isFilesEmpty = peer.getFiles().isEmpty();
+        boolean isSearchEmpty;
+        if ((msg.getComment()) != null){
+            isSearchEmpty = (msg.getComment()).equals("");
+        }else if ((msg.getComment()) != null){
+            isSearchEmpty = false;
+        }else{
+            isSearchEmpty = true;
+        }
         if(!msg.getOption().equals("ALIVE") && id == msg.getIdRet()){ // se a mensagem tiver o mesmo ack, a mensagem enviada é confirmada
             ack = true;
-        }
-        if(!msg.getOption().equals("ALIVE") && ack && !getStatusIdSend(msg.getIdRet())) { // verifica se não é alive, ou se está fora de ordem ou já foi confirmada
             setMsgStatus(id,true); //confirma o ack
             switch (msg.getOption()) {
                 case "JOIN_OK": // quando receber o retorno do JOIN do servidor
-                    if(!peer.getFiles().isEmpty()){
-                        System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString().replace("[","").replace("]","").replace(",","")); // imprime as informações do Peer
-                    }
-                    else{
-                        System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString()); // imprime as informações do Peer
-                    }
-                    break;
                 case "JOIN_DONE": // quando o peer já fez o join anteriormente
-                    if(!peer.getFiles().isEmpty()){
+                    if(!isFilesEmpty){
                         System.out.println("Sou peer " + peer.getIp() + ":" + peer.getPort() + " com arquivos " + (peer.getFiles()).toString().replace("[","").replace("]","").replace(",","")); // imprime as informações do Peer
                     }
                     else{
@@ -477,7 +459,7 @@ public class Mensagem {
                     }
                     break;
                 case "SEARCH": // o caso default foi definido como retorno do SEARCH do servidor
-                    if(!(msg.getComment()).equals("")) {
+                    if(!isSearchEmpty) {
                         String[] ipsList = msg.getComment().split(",");
                         ArrayList<String> ipsListSearch = new ArrayList<>();
                         for (int i = 0; i < ipsList.length; i++) {
