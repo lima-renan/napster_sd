@@ -89,15 +89,26 @@ class ServerThreadSendAlive extends Thread {
         // As threads prestam atendimento aos peers, em caso de erro é exibida uma exceção
             boolean run = true;
             while(run) {
-                try {
-                    Thread.sleep(30000); // Aguarda por 30s
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                if(ip_port_peers.containsKey(new AbstractMap.SimpleEntry<>(recPkt.getAddress().getHostAddress(),String.valueOf(recPkt.getPort())))) { //se o peer estiver ativo
+                    try {
+                        Thread.sleep(30000); // Aguarda por 30s
+                        if(ip_port_peers.containsKey(new AbstractMap.SimpleEntry<>(recPkt.getAddress().getHostAddress(),String.valueOf(recPkt.getPort())))) { // verifica se o peer está ativo antes de enviar o alive
+                            try {
+                                run = Mensagem.sendAlive(sock, recPkt, ip_port_peers, files_peers);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        else{ // se não tiver peer ativo, desliga o alive
+                            run = false;
+                        }
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+
                 }
-                try {
-                    run = Mensagem.sendAlive(sock, recPkt, ip_port_peers, files_peers);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                else{ // se não tiver peer ativo, desliga o alive
+                    run = false;
                 }
             }
 

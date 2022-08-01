@@ -2,13 +2,13 @@ package p2p;
 
 import com.google.gson.Gson;
 
+
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
-
-
+import java.util.List;
+import java.util.stream.Collectors;
 
 
 
@@ -20,8 +20,14 @@ public class Peer {
     private String port;
     private ArrayList<String> files;
     private String folder; //Endereço da pasta com os arquivos
-    private Socket sock; //Socket que será utilizado para envio de mensagens TCP pelo peer
-    public static volatile boolean running; //determina se o peer está em execução
+    private String lastFile; //armazena o último arquivo baixado
+    private String solicitedFile; // arquivo solicitado para o download
+    private volatile boolean answer; // váriavel que indica se a mensagem foi recebida de outro peer
+
+    private volatile boolean running; //determina se o peer está em execução
+
+    private ArrayList<String> peersSearch; // armazena os IPs e portas dos peers que possuem o arquivo
+
 
 
     // Métodos setters e getters
@@ -35,42 +41,36 @@ public class Peer {
     public String getFolder() {
         return this.folder;
     }
-    public Socket getSock(){ return this.sock; }
+    public String getLastFile(){ return this.lastFile; }
+    public String getSolicitedFile(){ return this.solicitedFile; }
+    public Boolean getAnswer() { return this.answer; }
 
+    public Boolean getRunning() { return this.running; }
+    public ArrayList<String> getPeersSearch() {
+        return this.peersSearch;
+    }
     public void setIp(String ip) { this.ip = ip; }
 
     public void setPort(String port) { this.port = port; }
 
     public void setFiles (ArrayList<String>files) { this.files = files; }
     public void setFolder(String folder) { this.folder = folder; }
-    public void setSock (Socket sock){ this.sock = sock;}
 
+    public void setLastFile (String file){ this.lastFile = file; }
+    public void setSolicitedFile (String solicitedFileile){ this.solicitedFile = solicitedFileile; }
+    public void setAnswer (boolean answer){ this.answer = answer; }
+
+    public void setRunning (boolean run){ this.running = run; }
+    public void setPeersSearch (ArrayList<String>peersSearch) { this.peersSearch = peersSearch; }
 
     public Peer (){
 
     }
 
-    public Peer(String ip, String port) {
-        this.setIp(ip);
-        this.setPort(port);
-    }
-
-    public Peer(String ip, String port, String folder) {
-        this.setIp(ip);
-        this.setPort(port);
-        this.setFolder(folder);
-    }
-
-    public Peer(String ip, String port, ArrayList<String> files, String folder) {
-        this.setIp(ip);
-        this.setPort(port);
-        this.setFiles(files);
-        this.setFolder(folder);
-    }
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        running = true; //inicia o peer
         Peer peer = new Peer(); // Cria estrutura para receber especificações do peer e
+        peer.setRunning(true); //inicia o peer
         Mensagem.welcome(); // exibe mensagem de inicialização
         Mensagem.PeerConfig(peer); //
         DatagramSocket clientSocket = new DatagramSocket(Integer.parseInt(peer.getPort()),InetAddress.getByName(peer.getIp())); // Datagrama para conexão UDP com o Servidor
@@ -80,16 +80,24 @@ public class Peer {
         Thread reck = new PeerThreadReceiver(peer, clientSocket, recPkt); // Gera uma nova thread qd chega uma mensagem do servidor
         reck.setName("RECK");
         reck.start();
-        Thread send = new PeerThreadSend(peer, clientSocket, "START"); // estabelelce a primeira conexão com o server
+        Thread send = new PeerThreadSend(peer, clientSocket, "START"); // estabelece a primeira conexão com o server
         send.join();
-        Thread tcpCnt = new PeerThreadDownload(peerTCP, peer); //Thread para recebimento de solicitações de downloads de outros peers via TCP
+        Thread tcpCnt = new PeerThreadDownload(peerTCP, clientSocket, peer); //Thread para recebimento de solicitações de downloads de outros peers via TCP
         tcpCnt.setName("tcpConnect");
         tcpCnt.start();
-        while (Peer.running) {
+        long timer = System.currentTimeMillis();
+        while(System.currentTimeMillis() - timer < 1000){
+            //aguardar estabelecer a conexão
+        }
+        while (peer.getRunning()) {
             Mensagem.menu(peer,clientSocket); //exibe o menu de opções: JOIN, SEARCH, DOWNLOAD E LEAVE - usa thread para enviar
         }
-
-
+        // quando receber a confirmação do LEAVE:
+        reck.interrupt();
+        tcpCnt.interrupt();
+        clientSocket.close(); // fecha o socket com o servidor
+        System.err.println("Peer desligado!"); //mensagem de warning sobre nova tentativa de conexão
+        System.exit(0); //encerra o processo
     }
 }
 
@@ -133,8 +141,9 @@ class PeerThreadReceiver extends Thread {
     public void run() {
         // A thread recebe mensagem ao servidor
         try {
-            while(Peer.running) {
+            while(peer.getRunning()) {
                 Mensagem.ACKfromServer(peer, clientSocket, recPacket); //aguarda retorno do servidor
+
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -149,33 +158,46 @@ class PeerThreadReceiver extends Thread {
 class PeerThreadDownload extends Thread {
 
     private ServerSocket peerSocket; // socket para recebimento de solicitações de Download
+    private DatagramSocket clientSocket; // utilizado para enviar update ao servidor
     private Peer peer; // detalhes do peer
 
-    public PeerThreadDownload (ServerSocket peerSocket, Peer peer){
+    public PeerThreadDownload (ServerSocket peerSocket, DatagramSocket clientSocket, Peer peer){
         this.peerSocket = peerSocket;
+        this.clientSocket = clientSocket;
         this.peer = peer;
     }
 
     public void run() {
         //Ref.: https://www.baeldung.com/java-inputstream-server-socket
         try {
-            while(Peer.running) {
+            while(peer.getRunning()) {
                 Socket node = peerSocket.accept();
-                peer.setSock(node);
-                int bufferSize = node.getReceiveBufferSize();
-                DataInputStream in = new DataInputStream(new BufferedInputStream(node.getInputStream()));
-                char dataType = in.readChar();
-                int read;
-                System.out.println(dataType);
-                //System.out.println(in.readUTF());
-                if (dataType == 's') { // se a mensagem enviada for uma string, deve-se validar se é DOWNLOAD_NEGADO ou uma solicitação de arquivo
-                    int length = in.readInt();
+                peer.setAnswer(true); // indica nas especificações que a mensagem foi recebida de outro peer
+                DataInputStream clientData = new DataInputStream(new BufferedInputStream(node.getInputStream()));
+                if(clientData.readChar() == 'f'){ // se for um arquivo
+                    String filename = clientData.readUTF(); // armazena o nome do arquivo
+                    long fileSize = clientData.readLong(); // lê o tamanho do arquivo
+                    FileOutputStream fos = new FileOutputStream(peer.getFolder() + "/" + filename); // cria uma cópia do arquivo recebido no diretório do peer
+                    byte[] fileByte = new byte[12*1024]; //buffer que armazena os bytes da mensagem recebida
+                    int read; // variável para auxiliar na leitura dos bytes
+                    while (fileSize > 0 && (read = clientData.read(fileByte, 0, (int)Math.min(fileByte.length, fileSize))) != -1) {
+                        fos.write(fileByte, 0, read);
+                        fileSize -= read; // lê até atingir o tamanho do arquivo
+                    }
+                    fos.close(); // fecha o arquivo
+                    peer.setLastFile(filename); // adiciona nas esepcificações do peer, o nome do arquivo baixado
+                    Thread send = new PeerThreadSend(peer, clientSocket, "UPDATE"); // envia um UPDATE para o server
+                    send.join(); // aguarda a conclusão do processo
+                    System.out.println("Arquivo " + filename + " baixado com sucesso na pasta " + peer.getFolder());
+
+                } else {// se a mensagem enviada for uma string, deve-se validar se é DOWNLOAD_NEGADO ou uma solicitação de arquivo
+                    int length = clientData.readInt();
                     byte[] msgByte = new byte[length]; //buffer que armazena os bytes da mensagem recebida
                     boolean end = false; //váriavel para controlar leitura dos bytes
                     StringBuilder dataString = new StringBuilder(length); //váriavel para gerar a string
-                    int totalBytesRead = 0;
-                    while (!end) {
-                        int currentBytesRead = in.read(msgByte);
+                    int totalBytesRead = 0; // váriavel para auxiliar na leitura dos bytes
+                    while (!end) { // transforma os bytes em string
+                        int currentBytesRead = clientData.read(msgByte);
                         totalBytesRead = currentBytesRead + totalBytesRead;
                         if (totalBytesRead <= length) {
                             dataString
@@ -192,11 +214,30 @@ class PeerThreadDownload extends Thread {
                     Gson recgson = new Gson(); //instância para gerar a mensagem a partir string json do cliente
                     Mensagem msg = recgson.fromJson(dataString.toString(), Mensagem.class);  //gera a mensagem a partir da string json recebida do cliente
                     if (msg.getComment().equals("DOWNLOAD_NEGADO")) {
-                        System.out.println("peer "+ msg.getIpPeer() + ":" + "[" + msg.getPortPeer() +"]" + "negou o download, pedindo agora para o peer [IP]:[porta]");
-                    } else { //caso contrário verifica se o arquivo solicitado existe
+                        ArrayList<String> ipsSearch = peer.getPeersSearch();
+                        if(ipsSearch.size() > 1){
+                            List<String> filteredList = ipsSearch.stream()
+                                    .filter(ip -> !ip.equals(msg.getIpPeer()+":"+msg.getPortPeer()))
+                                    .collect(Collectors.toList());
+
+                            String[] ans = filteredList.get(0).split(":");
+                            System.out.println("peer "+ msg.getIpPeer() + ":" + msg.getPortPeer() + " negou o download, pedindo agora para o peer " + ans[0] + ":" + ans[1]);
+                            PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer,ans[0], Integer.parseInt(ans[1]), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
+                            sendString.start(); // inicia a thread
+                            sendString.join(); // aguarda a conclusão
+                        }else{ // caso só um peer tenha o arquivo
+                            System.out.println("peer "+ msg.getIpPeer() + ":" + "[" + msg.getPortPeer() +"]" + " negou o download, pedindo agora para o peer " + msg.getIpPeer() + ":" + msg.getIpPeer());
+                            long timer = System.currentTimeMillis();
+                            while((System.currentTimeMillis() - timer < 5000)){ // aguarda 5s para enviar uma nova solicitação
+                            }
+                            PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer,msg.getIpPeer(), Integer.parseInt(msg.getPortPeer()), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
+                            sendString.start(); // inicia a thread
+                            sendString.join(); // aguarda a conclusão
+                        }
+
+                    } else { //verifica se o arquivo solicitado existe
                         File myFile = new File(peer.getFolder() +"/"+ msg.getComment()); // instancia arquivo a partir o nome recebido pelo outro peer
-                        if (myFile.exists()) { //myFile.exists() && Math.random() < 0.5se o arquivo existir, sorteia para permitir o DOWNLOAD ou não
-                            System.out.println("enviando arquivo: " + myFile.getName() + " da pasta " + myFile.getPath());
+                        if (myFile.exists() && Math.random() < 0.2) { //se o arquivo existir, sorteia para permitir o DOWNLOAD ou não
                             PeerThreadSendFileTCP sendFile = new PeerThreadSendFileTCP(peer,msg.getIpPeer(), Integer.parseInt(msg.getPortPeer()),myFile); //seta o ip e porta do peer remoto e envia a mensagem
                             sendFile.start(); // inicia a thread
                             sendFile.join(); // aguarda a conclusão
@@ -207,20 +248,6 @@ class PeerThreadDownload extends Thread {
                         }
                     }
 
-                }else{ //if (dataType == 'f'){ // o peer remoto está enviando um arquivo
-                    byte[] fileByte = new byte[bufferSize]; //buffer que armazena os bytes da mensagem recebida
-                    String filename = in.readUTF();
-                    System.out.println("Recebido!");
-                    System.out.println(peer.getFolder()+ "/" + "teste");
-                    OutputStream fos = new FileOutputStream(peer.getFolder()+ "/" + filename);
-                    while ((read= in.read(fileByte)) >= 0){
-                        fos.write(fileByte, 0, read);
-                    }
-                    fos.flush();
-                    node.close();
-                    if (node.getInputStream() != null) {
-                        node.getInputStream().close();
-                    }
                 }
             }
         }
@@ -293,28 +320,31 @@ class PeerThreadSendFileTCP extends Thread {
     public void run() {
 
         try {
-
-            FileInputStream fis = new FileInputStream(file);
-            BufferedInputStream bis = new BufferedInputStream(fis);
-
-            DataInputStream dis = new DataInputStream(bis);
-
             // Tenta criar uma conexão com o peer remoto com o ip e porta fornecidos
             Socket s = new Socket(ipSend, portSend);
+
+            //váriaveis para ler o arquivo no diretório do peer
+            FileInputStream fis = new FileInputStream(file);
+            BufferedInputStream bis = new BufferedInputStream(fis);
+            DataInputStream dis = new DataInputStream(bis);
+
             // cria a cadeia de saída (escrita) de informações do socket
-            OutputStream os = s.getOutputStream();
-            DataOutputStream writer = new DataOutputStream(os);
-            writer.writeUTF(file.getName()); // adiciona o nome do arquivo
-            writer.writeChar('f'); // especifica o tipo de mensagem
-            byte[] dataBuffer = new byte[4096]; // cria vetor para armazenar blocos de bytes do arquivo
-            int read;
-            while((read = dis.read(dataBuffer)) >= 0){
+            DataOutputStream writer = new DataOutputStream(new BufferedOutputStream((s.getOutputStream())));
+
+            writer.writeChar('f'); //especifica que é um arquivo
+            writer.flush();
+            writer.writeUTF(file.getName()); //envia o nome do arquivo
+            writer.flush();
+            writer.writeLong(file.length()); //envia o tamanho do arquivo
+            writer.flush();
+            byte[] dataBuffer = new byte[12*1024]; // cria vetor para armazenar blocos de bytes do arquivo
+            int read = dis.read(dataBuffer, 0,dataBuffer.length);
+            while(read != -1){
                 writer.write(dataBuffer, 0, read);
+                read = dis.read(dataBuffer, 0,dataBuffer.length);
             }
-            writer.close();
-            if (writer != null) {
-                writer.flush();
-            }
+            writer.flush();
+            s.close();
 
         }
         catch(Exception e){
