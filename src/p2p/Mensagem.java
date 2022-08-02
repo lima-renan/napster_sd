@@ -103,7 +103,7 @@ public class Mensagem {
                             while(!run){// aguarda o retorno do outro peer
                                 run = peer.getAnswer();
                             }
-                            sleep(10000); // espera o retorno do Download
+                            sleep(35000); // espera o retorno do Download
                             break;
                         } else {
                             System.err.println("O peer não está conectado ao servidor!"); // exibe aviso de que o peer não está conectado

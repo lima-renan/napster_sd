@@ -224,9 +224,9 @@ class PeerThreadDownload extends Thread {
                             sendString.start(); // inicia a thread
                             sendString.join(); // aguarda a conclusão
                         }else{ // caso só um peer tenha o arquivo
-                            System.out.println("peer "+ msg.getIpPeer() + ":" + "[" + msg.getPortPeer() +"]" + " negou o download, pedindo agora para o peer " + msg.getIpPeer() + ":" + msg.getIpPeer());
+                            System.out.println("peer "+ msg.getIpPeer() + ":" + "[" + msg.getPortPeer() +"]" + " negou o download, pedindo agora para o peer " + msg.getIpPeer() + ":" + msg.getPortPeer());
                             long timer = System.currentTimeMillis();
-                            while((System.currentTimeMillis() - timer < 5000)){ // aguarda 5s para enviar uma nova solicitação
+                            while((System.currentTimeMillis() - timer < 2000)){ // aguarda 2s para enviar uma nova solicitação
                             }
                             PeerThreadSendStringTCP sendString = new PeerThreadSendStringTCP(peer, msg.getIpPeer(), Integer.parseInt(msg.getPortPeer()), peer.getSolicitedFile()); //seta o ip e porta do peer remoto e envia a mensagem
                             sendString.start(); // inicia a thread
